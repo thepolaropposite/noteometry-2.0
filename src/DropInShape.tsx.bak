@@ -1,0 +1,60 @@
+import { BaseBoxShapeUtil, HTMLContainer, RecordProps, T, TLBaseShape } from 'tldraw';
+
+// Define the mathematical boundaries of the Drop-In
+export type IDropInShape = TLBaseShape<'drop-in', { w: number; h: number; content: string }>;
+
+export class DropInShapeUtil extends BaseBoxShapeUtil<IDropInShape> {
+  static type = 'drop-in' as const;
+  
+  static props: RecordProps<IDropInShape> = {
+    w: T.number,
+    h: T.number,
+    content: T.string,
+  };
+
+  getDefaultProps(): IDropInShape['props'] {
+    return { w: 350, h: 250, content: 'Initialize logic...' };
+  }
+
+  component(shape: IDropInShape) {
+    return (
+      <HTMLContainer
+        id={shape.id}
+        style={{
+          pointerEvents: 'all',
+          background: 'rgba(20, 20, 20, 0.95)',
+          border: '1px solid rgba(80, 80, 80, 0.6)',
+          borderRadius: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+          overflow: 'hidden'
+        }}
+      >
+        {/* Terminal Header */}
+        <div style={{ background: '#2a2a2a', padding: '8px 12px', fontSize: '12px', fontWeight: 'bold', color: '#888', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', userSelect: 'none' }}>
+          <span>System Drop-In</span>
+          <span style={{color: '#4f46e5'}}>// Noteometry</span>
+        </div>
+        
+        {/* Input Matrix 
+          The onWheel and onPointerDown stops the DOM from fighting the Canvas physics. 
+        */}
+        <textarea
+          style={{
+            flex: 1, width: '100%', background: 'transparent', border: 'none',
+            color: '#ececec', padding: '16px', fontSize: '14px', resize: 'none', outline: 'none',
+            fontFamily: 'monospace'
+          }}
+          defaultValue={shape.props.content}
+          onPointerDown={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+        />
+      </HTMLContainer>
+    );
+  }
+
+  indicator(shape: IDropInShape) {
+    return <rect width={shape.props.w} height={shape.props.h} rx="12" ry="12" />;
+  }
+}
