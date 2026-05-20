@@ -2068,3 +2068,526 @@ a.noteometry-dropin-action {
   color: #ffd4d2;
 }
 
+/* ───────────────────────────────────────────────────────────────
+ * AI Pane v2 — status chips, action tiles, cards, result render.
+ * Visual sibling of the right-click menu pane.
+ * ─────────────────────────────────────────────────────────────── */
+
+.noteometry-mm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.noteometry-mm-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: var(--nm-font, system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.noteometry-mm-chip.is-math {
+  background: rgba(142, 162, 255, 0.18);
+  border-color: rgba(142, 162, 255, 0.5);
+  color: #d6ddff;
+}
+
+.noteometry-mm-chip.is-general {
+  background: rgba(139, 149, 165, 0.2);
+  border-color: rgba(139, 149, 165, 0.55);
+  color: #dde3ec;
+}
+
+.noteometry-mm-chip.is-ok {
+  background: rgba(110, 209, 140, 0.16);
+  border-color: rgba(110, 209, 140, 0.5);
+  color: #c4f5d2;
+}
+
+.noteometry-mm-chip.is-on {
+  background: rgba(110, 209, 140, 0.16);
+  border-color: rgba(110, 209, 140, 0.5);
+  color: #c4f5d2;
+}
+
+.noteometry-mm-chip.is-warn {
+  background: rgba(243, 186, 91, 0.16);
+  border-color: rgba(243, 186, 91, 0.55);
+  color: #ffe0a3;
+}
+
+.noteometry-mm-chip.is-error {
+  background: rgba(226, 85, 79, 0.18);
+  border-color: rgba(226, 85, 79, 0.55);
+  color: #ffd2cf;
+}
+
+.noteometry-mm-chip.is-muted {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.noteometry-mm-chip.is-model {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.62);
+  font-family: var(--nm-font-mono, monospace);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 500;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Action row — large app-like tiles, responsive grid. */
+.noteometry-mm-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.noteometry-mm-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f0f1f6;
+  font-family: var(--nm-font, system-ui, sans-serif);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  text-align: left;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.noteometry-mm-tile-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--nm-action-accent, #d6ddff);
+  flex-shrink: 0;
+}
+
+.noteometry-mm-tile-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.noteometry-mm-tile-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.noteometry-mm-tile-primary {
+  border-color: color-mix(in srgb, var(--nm-action-accent, #5aa0e8) 55%, transparent);
+  background: color-mix(in srgb, var(--nm-action-accent, #5aa0e8) 14%, transparent);
+}
+
+.noteometry-mm-tile-primary .noteometry-mm-tile-icon {
+  background: color-mix(in srgb, var(--nm-action-accent, #5aa0e8) 30%, transparent);
+  color: #ffffff;
+}
+
+.noteometry-mm-tile-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nm-action-accent, #5aa0e8) 24%, transparent);
+  border-color: color-mix(in srgb, var(--nm-action-accent, #5aa0e8) 80%, transparent);
+}
+
+.noteometry-mm-tile-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.noteometry-mm-tile:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* Card — rounded sectioned container with colored dot title. */
+.noteometry-mm-card {
+  padding: 12px 14px 14px;
+  margin: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+}
+
+.noteometry-mm-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.noteometry-mm-card-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.noteometry-mm-card-title {
+  margin: 0;
+  font-family: var(--nm-font, system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  flex: 1;
+}
+
+.noteometry-mm-card-action {
+  display: inline-flex;
+}
+
+.noteometry-mm-card-action-btn {
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+}
+
+.noteometry-mm-card-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.noteometry-mm-card-body {
+  font-family: var(--nm-font, system-ui, sans-serif);
+  font-size: 14px;
+  line-height: 1.55;
+  color: #ececf1;
+}
+
+.noteometry-mm-card-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.noteometry-mm-card-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
+}
+
+.noteometry-mm-card-empty-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Result card render — clean math, v12 section headings, source toggle. */
+.noteometry-mm-result {
+  background: #ffffff;
+  color: #111418;
+  border-radius: 10px;
+  padding: 12px 14px;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.noteometry-mm-result-v12 {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.noteometry-mm-result-heading {
+  margin: 12px 0 2px;
+  padding: 4px 0 2px;
+  font-family: var(--nm-font, system-ui, sans-serif);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4f5666;
+  border-bottom: 1px solid rgba(20, 24, 32, 0.08);
+}
+
+.noteometry-mm-result-heading:first-child {
+  margin-top: 0;
+}
+
+.noteometry-mm-result-heading.is-answer {
+  color: #0e2c14;
+  border-bottom-color: rgba(110, 209, 140, 0.6);
+}
+
+.noteometry-mm-result-body {
+  font-family: var(--nm-font, system-ui, sans-serif);
+  font-size: 14px;
+  color: #111418;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.noteometry-mm-result-body math,
+.noteometry-mm-result-body .katex {
+  font-size: 1.05em;
+}
+
+.noteometry-mm-result-source-toggle {
+  margin-top: 10px;
+  padding: 4px 10px;
+  border: 1px solid rgba(20, 24, 32, 0.16);
+  border-radius: 8px;
+  background: #f5f6fa;
+  color: #4f5666;
+  font-family: var(--nm-font, system-ui, sans-serif);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.noteometry-mm-result-source-toggle:hover {
+  background: #e9ecf3;
+}
+
+.noteometry-mm-result-source {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f3f4f7;
+  color: #2d3340;
+  font-family: var(--nm-font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+}
+
+/* Verified Input textarea — dyslexia-friendly spacing. */
+.noteometry-mm-textarea-wrap {
+  position: relative;
+}
+
+.noteometry-mm-textarea-wrap textarea,
+.noteometry-mm-card .noteometry-mm-preview-panel textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 10px 38px 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f0f1f6;
+  font-family: var(--nm-font-mono, monospace);
+  font-size: 14px;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  outline: none;
+}
+
+.noteometry-mm-textarea-wrap textarea:focus {
+  border-color: rgba(243, 186, 91, 0.7);
+  background: rgba(243, 186, 91, 0.05);
+}
+
+.noteometry-mm-textarea-wrap .noteometry-mm-composer-clear {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+/* Preview render inside card. */
+.noteometry-mm-card .noteometry-mm-preview-render {
+  background: #ffffff;
+  color: #111418;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.55;
+  min-height: 36px;
+}
+
+.noteometry-mm-preview-source {
+  display: inline-block;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #f3f4f7;
+  color: #4f5666;
+  font-family: var(--nm-font-mono, monospace);
+  font-size: 12px;
+}
+
+/* Question card composer. */
+.noteometry-mm-card .noteometry-mm-composer {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* Compact thumbs inside Capture cards. */
+.noteometry-mm-card .noteometry-mm-thumb {
+  margin: 0;
+}
+
+.noteometry-mm-card .noteometry-mm-thumb img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #ffffff;
+  display: block;
+}
+
+.noteometry-mm-card .noteometry-mm-thumb figcaption {
+  margin-top: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.02em;
+}
+
+/* Details disclosure — keeps debug junk out of the calm primary view. */
+.noteometry-mm-details {
+  margin: 6px 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.noteometry-mm-details > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  font-family: var(--nm-font, system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.noteometry-mm-details > summary::-webkit-details-marker { display: none; }
+
+.noteometry-mm-details[open] > summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.noteometry-mm-details-body {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.noteometry-mm-details-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 4px 10px;
+  font-family: var(--nm-font-mono, monospace);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.noteometry-mm-details-list dt {
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+}
+
+.noteometry-mm-details-list dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+.noteometry-mm-details-err { color: #ffd2cf; }
+
+.noteometry-mm-details-history {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 8px;
+}
+
+.noteometry-mm-details-history-head {
+  font-family: var(--nm-font, system-ui, sans-serif);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.noteometry-mm-details-history-item {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.noteometry-mm-details-history-item.is-error { color: #ffd2cf; }
+.noteometry-mm-details-history-role {
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+}
+.noteometry-mm-details-history-text {
+  font-family: var(--nm-font-mono, monospace);
+  word-break: break-word;
+}
+
+/* Hidden compat node used to preserve e2e accessible-name selectors. */
+.noteometry-mm-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+

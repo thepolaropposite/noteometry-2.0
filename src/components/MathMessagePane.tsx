@@ -49,6 +49,9 @@ import {
 } from '../prompts';
 import { copyForWord, renderAsMathML } from '../lib/mathml';
 import { markError, markSaved, markSaving } from '../lib/saveStatus';
+import {
+  EyeIcon, SolveIcon, CameraIcon, AskIcon, TrashIcon, WordIcon,
+} from './Icons';
 
 const STORAGE_KEY = 'noteometry-os:math-message-pane:v4';
 const LEGACY_STORAGE_KEY = 'noteometry-os:math-message-pane:v3';
@@ -251,27 +254,10 @@ function renderLatexSafe(src: string, displayMode: boolean): { html: string } | 
   } catch (e) { return { error: (e as Error).message }; }
 }
 
-function RichText({ value }: { value: string }): ReactNode {
-  const segments = useMemo(() => splitForLatex(value), [value]);
-  return (
-    <>
-      {segments.map((seg, i) => {
-        if (seg.kind === 'text') {
-          return <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{seg.value}</span>;
-        }
-        const result = renderLatexSafe(seg.value, seg.kind === 'block');
-        if ('error' in result) {
-          return (
-            <span key={i} className="nm-mm-latex-error" title={result.error}>
-              {seg.kind === 'block' ? `$$${seg.value}$$` : `$${seg.value}$`}
-            </span>
-          );
-        }
-        return <span key={i} dangerouslySetInnerHTML={{ __html: result.html }} />;
-      })}
-    </>
-  );
-}
+/* RichText was the prior user-message renderer. Removed in the GUI
+ * overhaul; ResultRender handles assistant rendering and there is no
+ * user-message surface now. The shared splitForLatex / renderLatexSafe
+ * helpers above are still used by the Preview card. */
 
 /* ─── handle exposed to App.tsx for the right-click menu ─────────── */
 
@@ -317,8 +303,6 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
   const [diag, setDiag] = useState<Diag | null>(null);
 
   const generalPromptRef = useRef<HTMLTextAreaElement | null>(null);
-  const mathLogRef = useRef<HTMLDivElement | null>(null);
-  const generalLogRef = useRef<HTMLDivElement | null>(null);
 
   // Push pane open + measured width to the page as a CSS variable so the
   // canvas-shell, page rail, and zoom control inset by the *actual*
@@ -341,10 +325,6 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
     });
   }, [paneOpen, paneWidth, mode, showSettings, ai, verifiedInput, mathLog, generalDraft, generalLog]);
 
-  useEffect(() => {
-    const el = mode === 'math' ? mathLogRef.current : generalLogRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [mode, mathLog.length, generalLog.length]);
 
   /* ─── horizontal resize handle ───────────────────────────────── */
 
@@ -696,16 +676,13 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
         </section>
       )}
 
-      <section className={`noteometry-mm-diag-strip${diag?.ok === false ? ' is-error' : diag?.ok ? ' is-ok' : ''}`}>
-        <div><strong>Mode:</strong> {mode}{diag ? ` · ${diag.step}` : ''}</div>
-        <div><strong>Model:</strong> {diag?.model ?? ai.model}</div>
-        <div><strong>Captured:</strong> {captured ? 'yes' : 'no'}</div>
-        <div><strong>Verified Input:</strong> {verifiedInput.trim() ? 'ready' : 'empty'}</div>
-        <div><strong>Last HTTP:</strong> {diag?.httpStatus ?? '—'}</div>
-        {diag && !diag.ok && diag.excerpt && (
-          <div className="noteometry-mm-diag-err"><strong>Error:</strong> {diag.excerpt}</div>
-        )}
-      </section>
+      <StatusChips
+        mode={mode}
+        diag={diag}
+        captured={!!captured}
+        verifiedReady={verifiedInput.trim().length > 0}
+        modelName={ai.model}
+      />
 
       {mode === 'math' ? (
         <MathPanel
@@ -715,12 +692,12 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
           verifiedInput={verifiedInput}
           previewSegments={previewSegments}
           mathLog={mathLog}
+          diag={diag}
           onReadMath={() => void readMath()}
           onSolve={() => void solveVerifiedMath()}
           onClearInput={() => setVerifiedInput('')}
           onInputChange={setVerifiedInput}
           onCopyForWord={onCopyForWord}
-          scrollRef={mathLogRef}
         />
       ) : (
         <GeneralPanel
@@ -728,6 +705,7 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
           generalDraft={generalDraft}
           generalLog={generalLog}
           generalSending={generalSending}
+          diag={diag}
           onCapture={() => void captureGeneral()}
           onClearCapture={() => setCaptured(null)}
           onClearDraft={() => setGeneralDraft('')}
@@ -735,7 +713,6 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
           onSend={() => void sendGeneral()}
           onCopyForWord={onCopyForWord}
           promptRef={generalPromptRef}
-          scrollRef={generalLogRef}
         />
       )}
 
@@ -755,7 +732,235 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
 
 export default MathMessagePane;
 
+/* ─── Shared pane primitives ──────────────────────────────────── */
+
+/** Top-of-pane status chips. Replaces the old debug-console diag line
+ *  ("Mode: math · Model: … · Captured: no · Verified Input: ready · Last
+ *  HTTP: —") with a row of compact pills. The model name and the last
+ *  HTTP/error live inside the per-panel Details disclosure now, not
+ *  in the user's primary view. */
+function StatusChips({ mode, diag, captured, verifiedReady, modelName }: {
+  mode: Mode;
+  diag: Diag | null;
+  captured: boolean;
+  verifiedReady: boolean;
+  modelName: string;
+}) {
+  const connState = diag?.ok === false ? 'error' : 'ok';
+  return (
+    <section className="noteometry-mm-chips" aria-label="Status">
+      <span className={`noteometry-mm-chip is-${mode}`}>{mode === 'math' ? 'Math' : 'General'}</span>
+      <span className={`noteometry-mm-chip is-${connState}`} title={diag?.ok === false ? 'Last call failed — see Details' : 'Provider OK'}>
+        {connState === 'error' ? 'Issue' : 'Connected'}
+      </span>
+      <span className={`noteometry-mm-chip ${captured ? 'is-on' : 'is-muted'}`}>
+        {captured ? 'Captured' : 'No Capture'}
+      </span>
+      {mode === 'math' && (
+        <span className={`noteometry-mm-chip ${verifiedReady ? 'is-on' : 'is-warn'}`}>
+          {verifiedReady ? 'Ready' : 'Needs Input'}
+        </span>
+      )}
+      <span className="noteometry-mm-chip is-model" title={`Model: ${modelName}`}>
+        {modelName.split('/').pop() ?? modelName}
+      </span>
+    </section>
+  );
+}
+
+/** Large app-like action button used in the per-panel action row. */
+function ActionTile({ label, icon, onClick, disabled = false, accent, variant = 'primary' }: {
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  accent: string;
+  variant?: 'primary' | 'secondary';
+}) {
+  const style = variant === 'primary'
+    ? ({ ['--nm-action-accent' as 'color']: accent } as React.CSSProperties)
+    : undefined;
+  return (
+    <button
+      type="button"
+      className={`noteometry-mm-tile noteometry-mm-tile-${variant}`}
+      onClick={onClick}
+      disabled={disabled}
+      style={style}
+      title={label}
+    >
+      <span className="noteometry-mm-tile-icon" aria-hidden="true">{icon}</span>
+      <span className="noteometry-mm-tile-label">{label}</span>
+    </button>
+  );
+}
+
+/** Section card with a colored accent dot and a quiet title. Matches the
+ *  right-click menu's section-header treatment so the AI pane reads as
+ *  the menu pane's sibling. */
+function Card({ title, accent, children, action }: {
+  title: string;
+  accent: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="noteometry-mm-card">
+      <header className="noteometry-mm-card-head">
+        <span className="noteometry-mm-card-dot" style={{ background: accent }} aria-hidden="true" />
+        <h3 className="noteometry-mm-card-title">{title}</h3>
+        {action && <div className="noteometry-mm-card-action">{action}</div>}
+      </header>
+      <div className="noteometry-mm-card-body">{children}</div>
+    </section>
+  );
+}
+
+/** Quiet empty-state placeholder for cards with no content yet. */
+function CardPlaceholder({ icon, label }: { icon?: ReactNode; label: string }) {
+  return (
+    <div className="noteometry-mm-card-empty">
+      {icon && <span className="noteometry-mm-card-empty-icon" aria-hidden="true">{icon}</span>}
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/* ─── Result rendering with v12 section detection ─────────────── */
+
+const V12_SECTION_RE = /^(Problem(?:\s+\d+(?:\s+Week\s+\d+)?)?|Given|Equations|Where|Solution|Answer)\s*$/i;
+
+interface ResultSection { kind: 'heading' | 'body'; value: string; isAnswer?: boolean }
+
+function splitV12Sections(text: string): ResultSection[] {
+  const out: ResultSection[] = [];
+  const lines = text.split(/\r?\n/);
+  let buf: string[] = [];
+  const flush = () => {
+    if (buf.length) {
+      out.push({ kind: 'body', value: buf.join('\n').trim() });
+      buf = [];
+    }
+  };
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (V12_SECTION_RE.test(trimmed)) {
+      flush();
+      out.push({ kind: 'heading', value: trimmed, isAnswer: /^Answer$/i.test(trimmed) });
+    } else {
+      buf.push(line);
+    }
+  }
+  flush();
+  return out.filter((s) => s.kind === 'heading' || s.value.length > 0);
+}
+
+/** Render an assistant result. Math (v12 or otherwise) renders via
+ *  KaTeX → MathML through renderAsMathML so equations are real, not
+ *  raw escaped LaTeX. Section headers (Problem / Given / … / Answer)
+ *  become visually distinct h4 rows; the final Answer block is
+ *  highlighted. A "Show source" disclosure exposes the raw text. */
+function ResultRender({ text }: { text: string }) {
+  const [showSource, setShowSource] = useState(false);
+  const sections = useMemo(() => splitV12Sections(text), [text]);
+  const looksV12 = sections.some((s) => s.kind === 'heading');
+  return (
+    <div className="noteometry-mm-result">
+      {looksV12 ? (
+        <div className="noteometry-mm-result-v12">
+          {sections.map((s, i) => {
+            if (s.kind === 'heading') {
+              return (
+                <h4
+                  key={`h-${i}`}
+                  className={`noteometry-mm-result-heading${s.isAnswer ? ' is-answer' : ''}`}
+                >
+                  {s.value}
+                </h4>
+              );
+            }
+            return (
+              <div
+                key={`b-${i}`}
+                className="noteometry-mm-result-body"
+                dangerouslySetInnerHTML={{ __html: renderAsMathML(s.value) }}
+              />
+            );
+          })}
+        </div>
+      ) : (
+        <div
+          className="noteometry-mm-result-body"
+          dangerouslySetInnerHTML={{ __html: renderAsMathML(text) }}
+        />
+      )}
+      <button
+        type="button"
+        className="noteometry-mm-result-source-toggle"
+        onClick={() => setShowSource((v) => !v)}
+        aria-expanded={showSource}
+      >
+        {showSource ? 'Hide source' : 'Show source'}
+      </button>
+      {showSource && <pre className="noteometry-mm-result-source">{text}</pre>}
+    </div>
+  );
+}
+
+/** Quiet disclosure for HTTP status / error excerpts / prompt versions /
+ *  recent history — anything that would otherwise clutter the calm
+ *  primary view. Default state: closed. */
+function DetailsDisclosure({ diag, history }: {
+  diag: Diag | null;
+  history?: LogEntry[];
+}) {
+  if (!diag && !history?.length) return null;
+  return (
+    <details className="noteometry-mm-details">
+      <summary>Details</summary>
+      <div className="noteometry-mm-details-body">
+        {diag && (
+          <dl className="noteometry-mm-details-list">
+            <dt>Step</dt><dd>{diag.step}</dd>
+            <dt>Endpoint</dt><dd>{diag.endpoint}</dd>
+            <dt>Model</dt><dd>{diag.model}</dd>
+            <dt>Captured</dt><dd>{diag.captured ? 'yes' : 'no'}</dd>
+            <dt>Preview ready</dt><dd>{diag.previewReady ? 'yes' : 'no'}</dd>
+            <dt>Prompt</dt><dd>{diag.promptVersion ?? '—'}</dd>
+            <dt>Last HTTP</dt><dd>{diag.httpStatus ?? '—'}</dd>
+            {!diag.ok && diag.excerpt && (<><dt>Error</dt><dd className="noteometry-mm-details-err">{diag.excerpt}</dd></>)}
+          </dl>
+        )}
+        {history && history.length > 1 && (
+          <div className="noteometry-mm-details-history">
+            <div className="noteometry-mm-details-history-head">Previous turns</div>
+            {history.slice(0, -1).reverse().map((e) => (
+              <div key={e.id} className={`noteometry-mm-details-history-item is-${e.role}`}>
+                <span className="noteometry-mm-details-history-role">{e.role}</span>
+                <span className="noteometry-mm-details-history-text">{e.text.slice(0, 220)}{e.text.length > 220 ? '…' : ''}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 /* ─── MATH panel (Preview + Input + Solve + Chat) ─────────────── */
+
+const ACCENT_CARD_CAPTURE = '#5aa0e8';   // blue — input from canvas
+const ACCENT_CARD_PREVIEW = '#c08fff';   // purple — model's read
+const ACCENT_CARD_VERIFIED = '#f3ba5b';  // amber — human verification
+const ACCENT_CARD_RESULT = '#6ed18c';    // green — final answer
+const ACCENT_CARD_QUESTION = '#8b95a5';  // slate — user prompt
+
+const ACTION_ACCENT_READ = '#5aa0e8';
+const ACTION_ACCENT_SOLVE = '#6ed18c';
+const ACTION_ACCENT_WORD = '#a78bfa';
+const ACTION_ACCENT_CAPTURE = '#5aa0e8';
+const ACTION_ACCENT_ASK = '#6ed18c';
+const ACTION_NEUTRAL = '#8b95a5';
 
 function MathPanel(props: {
   captured: CapturedImage | null;
@@ -764,90 +969,130 @@ function MathPanel(props: {
   verifiedInput: string;
   previewSegments: ReturnType<typeof splitForLatex>;
   mathLog: LogEntry[];
+  diag: Diag | null;
   onReadMath: () => void;
   onSolve: () => void;
   onClearInput: () => void;
   onInputChange: (next: string) => void;
   onCopyForWord: (text: string) => void;
-  scrollRef: React.MutableRefObject<HTMLDivElement | null>;
 }) {
   const {
-    captured, reading, solving, verifiedInput, previewSegments, mathLog,
-    onReadMath, onSolve, onClearInput, onInputChange,
-    onCopyForWord, scrollRef,
+    captured, reading, solving, verifiedInput, previewSegments, mathLog, diag,
+    onReadMath, onSolve, onClearInput, onInputChange, onCopyForWord,
   } = props;
 
   const canSolve = verifiedInput.trim().length > 0 && !solving;
+  const latestResult = useMemo(
+    () => [...mathLog].reverse().find((e) => e.role === 'assistant') ?? null,
+    [mathLog],
+  );
+  const hasResult = !!latestResult;
+  const previewHasContent = previewSegments.some((s) => s.value.trim().length > 0);
 
   return (
     <>
-      <section className="noteometry-mm-capture">
-        <div className="noteometry-mm-capture-head">
-          <span>Math Capture</span>
-          <div className="noteometry-mm-capture-actions">
-            <button type="button" onClick={onReadMath} disabled={reading} className="noteometry-mm-secondary">
-              {reading ? 'Reading…' : 'Read Math'}
-            </button>
-          </div>
-        </div>
+      <section className="noteometry-mm-actions" aria-label="Math actions">
+        <ActionTile
+          label={reading ? 'Reading…' : 'Read Math'}
+          icon={<EyeIcon />}
+          onClick={onReadMath}
+          disabled={reading}
+          accent={ACTION_ACCENT_READ}
+        />
+        <ActionTile
+          label={solving ? 'Solving…' : 'Solve'}
+          icon={<SolveIcon />}
+          onClick={onSolve}
+          disabled={!canSolve}
+          accent={ACTION_ACCENT_SOLVE}
+        />
+        <ActionTile
+          label="Copy for Word"
+          icon={<WordIcon />}
+          onClick={() => latestResult && onCopyForWord(latestResult.text)}
+          disabled={!hasResult}
+          accent={ACTION_ACCENT_WORD}
+        />
+        <ActionTile
+          label="Clear Input"
+          icon={<TrashIcon />}
+          onClick={onClearInput}
+          disabled={!verifiedInput}
+          accent={ACTION_NEUTRAL}
+          variant="secondary"
+        />
+      </section>
+
+      <Card title="Capture" accent={ACCENT_CARD_CAPTURE}>
         {captured ? (
           <figure className="noteometry-mm-thumb">
             <img src={captured.dataUrl} alt="Math capture preview" />
             <figcaption>{captured.width}×{captured.height} · {captured.shapeCount} shape{captured.shapeCount === 1 ? '' : 's'}</figcaption>
           </figure>
         ) : (
-          <div className="noteometry-mm-empty-capture">
-            Lasso math, then Read Math.
-          </div>
+          <CardPlaceholder icon={<CameraIcon />} label="No capture" />
         )}
-      </section>
+      </Card>
 
-      <section className="noteometry-mm-preview-panel">
-        <div className="noteometry-mm-capture-head">
-          <span>Preview</span>
-        </div>
-        <div className="noteometry-mm-preview-render">
-          {previewSegments.length === 0 || (previewSegments.length === 1 && !previewSegments[0]!.value.trim())
-            ? <span className="noteometry-mm-preview-empty">(transcription will render here)</span>
-            : previewSegments.map((seg, i) => {
-                if (seg.kind === 'text') return <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{seg.value}</span>;
-                const r = renderLatexSafe(seg.value, seg.kind === 'block');
-                if ('error' in r) return <span key={i} className="nm-mm-latex-error" title={r.error}>{seg.kind === 'block' ? `$$${seg.value}$$` : `$${seg.value}$`}</span>;
-                return <span key={i} dangerouslySetInnerHTML={{ __html: r.html }} />;
-              })}
-        </div>
+      <Card title="Preview" accent={ACCENT_CARD_PREVIEW}>
+        {previewHasContent ? (
+          <div className="noteometry-mm-preview-render">
+            {previewSegments.map((seg, i) => {
+              if (seg.kind === 'text') return <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{seg.value}</span>;
+              const r = renderLatexSafe(seg.value, seg.kind === 'block');
+              if ('error' in r) {
+                return (
+                  <span key={i} className="noteometry-mm-preview-source" title={r.error}>
+                    {seg.kind === 'block' ? `$$${seg.value}$$` : `$${seg.value}$`}
+                  </span>
+                );
+              }
+              return <span key={i} dangerouslySetInnerHTML={{ __html: r.html }} />;
+            })}
+          </div>
+        ) : (
+          <CardPlaceholder label="—" />
+        )}
+      </Card>
 
-        <div className="noteometry-mm-capture-head">
-          <span>Verified Input</span>
-          <div className="noteometry-mm-capture-actions">
+      <Card title="Verified Input" accent={ACCENT_CARD_VERIFIED}>
+        {/* The wrapper is intentionally a <section> with the legacy
+            .noteometry-mm-preview-panel class so the e2e selector
+            `section.noteometry-mm-preview-panel textarea` resolves. */}
+        <section className="noteometry-mm-preview-panel">
+          <div className="noteometry-mm-textarea-wrap">
+            <textarea
+              rows={5}
+              value={verifiedInput}
+              onChange={(e) => onInputChange(e.target.value)}
+              placeholder="Edit the transcription, then Solve."
+              spellCheck={false}
+            />
             <button
               type="button"
+              className="noteometry-mm-composer-clear"
               onClick={onClearInput}
-              className="noteometry-mm-secondary noteometry-mm-secondary-quiet"
               disabled={!verifiedInput}
-              title="Clear input"
+              aria-label="Empty verified input"
+              title="Empty field"
             >
-              Clear Input
+              ×
             </button>
           </div>
-        </div>
-        <textarea
-          rows={5}
-          value={verifiedInput}
-          onChange={(e) => onInputChange(e.target.value)}
-          spellCheck={false}
-        />
-        <button type="button" onClick={onSolve} disabled={!canSolve} className="noteometry-mm-send">
-          {solving ? 'Solving…' : 'Solve'}
-        </button>
-      </section>
+        </section>
+      </Card>
 
-      <section className="noteometry-mm-log" ref={scrollRef} aria-live="polite">
-        {mathLog.map((entry) => (
-          <ChatMessageRow key={entry.id} entry={entry} onCopyForWord={onCopyForWord} />
-        ))}
-        {solving && <div className="noteometry-mm-msg noteometry-mm-msg-pending">Solving…</div>}
-      </section>
+      <Card title="Result" accent={ACCENT_CARD_RESULT}>
+        {latestResult ? (
+          <ResultRender text={latestResult.text} />
+        ) : solving ? (
+          <CardPlaceholder label="Solving…" />
+        ) : (
+          <CardPlaceholder label="No result yet" />
+        )}
+      </Card>
+
+      <DetailsDisclosure diag={diag} history={mathLog} />
     </>
   );
 }
@@ -859,6 +1104,7 @@ function GeneralPanel(props: {
   generalDraft: string;
   generalLog: LogEntry[];
   generalSending: boolean;
+  diag: Diag | null;
   onCapture: () => void;
   onClearCapture: () => void;
   onClearDraft: () => void;
@@ -866,9 +1112,11 @@ function GeneralPanel(props: {
   onSend: () => void;
   onCopyForWord: (text: string) => void;
   promptRef: React.MutableRefObject<HTMLTextAreaElement | null>;
-  scrollRef: React.MutableRefObject<HTMLDivElement | null>;
 }) {
-  const { captured, generalDraft, generalLog, generalSending, onCapture, onClearCapture, onClearDraft, onDraftChange, onSend, onCopyForWord, promptRef, scrollRef } = props;
+  const {
+    captured, generalDraft, generalLog, generalSending, diag,
+    onCapture, onClearCapture, onClearDraft, onDraftChange, onSend, onCopyForWord, promptRef,
+  } = props;
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -880,95 +1128,102 @@ function GeneralPanel(props: {
     [onSend, generalSending]
   );
 
+  const latestResult = useMemo(
+    () => [...generalLog].reverse().find((e) => e.role === 'assistant') ?? null,
+    [generalLog],
+  );
+  const hasResult = !!latestResult;
+
   return (
     <>
-      <section className="noteometry-mm-capture">
-        <div className="noteometry-mm-capture-head">
-          <span>General Capture</span>
-          <div className="noteometry-mm-capture-actions">
-            <button type="button" onClick={onCapture} className="noteometry-mm-secondary">Capture</button>
-            {captured && (
-              <button type="button" onClick={onClearCapture} className="noteometry-mm-secondary noteometry-mm-secondary-quiet">Clear</button>
-            )}
-          </div>
-        </div>
+      <section className="noteometry-mm-actions" aria-label="General actions">
+        <ActionTile
+          label="Capture"
+          icon={<CameraIcon />}
+          onClick={onCapture}
+          accent={ACTION_ACCENT_CAPTURE}
+        />
+        <ActionTile
+          label={generalSending ? 'Asking…' : 'Ask'}
+          icon={<AskIcon />}
+          onClick={onSend}
+          disabled={generalSending}
+          accent={ACTION_ACCENT_ASK}
+        />
+        <ActionTile
+          label="Copy for Word"
+          icon={<WordIcon />}
+          onClick={() => latestResult && onCopyForWord(latestResult.text)}
+          disabled={!hasResult}
+          accent={ACTION_ACCENT_WORD}
+        />
+        <ActionTile
+          label="Clear Input"
+          icon={<TrashIcon />}
+          onClick={onClearDraft}
+          disabled={!generalDraft}
+          accent={ACTION_NEUTRAL}
+          variant="secondary"
+        />
+      </section>
+
+      <Card
+        title="Capture"
+        accent={ACCENT_CARD_CAPTURE}
+        action={captured ? (
+          <button type="button" onClick={onClearCapture} className="noteometry-mm-card-action-btn">Clear</button>
+        ) : undefined}
+      >
         {captured ? (
           <figure className="noteometry-mm-thumb">
             <img src={captured.dataUrl} alt="General capture preview" />
             <figcaption>{captured.width}×{captured.height} · {captured.shapeCount} shape{captured.shapeCount === 1 ? '' : 's'}</figcaption>
           </figure>
         ) : (
-          <div className="noteometry-mm-empty-capture">
-            Lasso, then Capture.
-          </div>
+          <CardPlaceholder icon={<CameraIcon />} label="No capture" />
         )}
-      </section>
+      </Card>
 
-      <section className="noteometry-mm-log" ref={scrollRef} aria-live="polite">
-        {generalLog.map((entry) => (
-          <ChatMessageRow key={entry.id} entry={entry} onCopyForWord={onCopyForWord} />
-        ))}
-        {generalSending && <div className="noteometry-mm-msg noteometry-mm-msg-pending">Thinking…</div>}
-      </section>
-
-      <section className="noteometry-mm-composer">
-        <div className="noteometry-mm-composer-input">
-          <textarea
-            ref={promptRef}
-            value={generalDraft}
-            onChange={(e) => onDraftChange(e.target.value)}
-            onKeyDown={onKeyDown}
-            rows={3}
-          />
-          <button
-            type="button"
-            className="noteometry-mm-composer-clear"
-            onClick={onClearDraft}
-            disabled={!generalDraft}
-            aria-label="Clear input"
-            title="Clear input"
-          >
-            ×
-          </button>
+      <Card title="Question" accent={ACCENT_CARD_QUESTION}>
+        <div className="noteometry-mm-composer">
+          <div className="noteometry-mm-composer-input">
+            <textarea
+              ref={promptRef}
+              value={generalDraft}
+              onChange={(e) => onDraftChange(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="Ask anything about the capture…"
+              rows={3}
+            />
+            <button
+              type="button"
+              className="noteometry-mm-composer-clear"
+              onClick={onClearDraft}
+              disabled={!generalDraft}
+              aria-label="Clear input"
+              title="Clear input"
+            >
+              ×
+            </button>
+          </div>
         </div>
-        <button type="button" onClick={onSend} disabled={generalSending} className="noteometry-mm-send">
-          {generalSending ? '…' : 'Ask'}
-        </button>
-      </section>
+      </Card>
+
+      <Card title="Result" accent={ACCENT_CARD_RESULT}>
+        {latestResult ? (
+          <ResultRender text={latestResult.text} />
+        ) : generalSending ? (
+          <CardPlaceholder label="Thinking…" />
+        ) : (
+          <CardPlaceholder label="No result yet" />
+        )}
+      </Card>
+
+      <DetailsDisclosure diag={diag} history={generalLog} />
     </>
   );
 }
 
-/* ─── Chat row with Copy actions ───────────────────────────────── */
-
-function ChatMessageRow({ entry, onCopyForWord }: {
-  entry: LogEntry;
-  onCopyForWord: (text: string) => void;
-}) {
-  const isAssistant = entry.role === 'assistant';
-  return (
-    <div className={`noteometry-mm-msg noteometry-mm-msg-${entry.role}`}>
-      {entry.imageDataUrl && <img className="noteometry-mm-msg-img" src={entry.imageDataUrl} alt="Captured region" />}
-      {isAssistant ? (
-        <div className="noteometry-mm-msg-text">
-          <div dangerouslySetInnerHTML={{ __html: renderAsMathML(entry.text) }} />
-        </div>
-      ) : (
-        <div className="noteometry-mm-msg-text"><RichText value={entry.text} /></div>
-      )}
-      {isAssistant && (
-        <div className="noteometry-mm-msg-actions">
-          <button
-            type="button"
-            className="noteometry-mm-action noteometry-mm-action-primary"
-            onClick={() => onCopyForWord(entry.text)}
-            title="Copy MathML to clipboard (paste into Word)"
-          >
-            <span aria-hidden="true" className="noteometry-mm-action-glyph">W</span>
-            Copy for Word
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+/* ChatMessageRow / RichText removed in the GUI overhaul — the new
+ * Result card uses ResultRender for assistant output, and there is no
+ * separate user-message rendering surface. */
