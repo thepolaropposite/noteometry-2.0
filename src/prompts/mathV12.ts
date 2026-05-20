@@ -130,11 +130,14 @@ Follow the structure above EXACTLY. Do not add headings. Do not add explanations
 PROMPT VERSION: ${MATH_V12_PROMPT_VERSION}`;
 
 /** User-side wrapper. Solve must ALWAYS use this — never a raw screenshot
- *  payload — so the solver receives the exact problem text Dan verified. */
+ *  payload — so the solver receives the exact problem text Dan verified.
+ *
+ *  The wrapper is intentionally minimal: one heading line so the model
+ *  knows the lines below are the problem statement, then the verified
+ *  text. The full Math v12 methodology lives in the system prompt and
+ *  is unaffected by this change. */
 export function buildMathV12UserMessage(verifiedProblem: string): string {
-  return `Here is the ENTIRE verified problem. Solve this problem using Math v12. Do not ignore any part of the problem.
+  return `VERIFIED PROBLEM INPUT:
 
-<VERIFIED_PROBLEM>
-${verifiedProblem}
-</VERIFIED_PROBLEM>`;
+${verifiedProblem}`;
 }

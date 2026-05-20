@@ -128,8 +128,8 @@ The Math pipeline is a **two-hop, verification-gated** flow. No shortcuts.
 [10] Solve sends the verified TEXT/LaTeX ONLY (no image)
         to the Math Solve TEXT model
         with the FULL Math v12 system prompt
-        and a user message wrapping the verified input in
-        <VERIFIED_PROBLEM>…</VERIFIED_PROBLEM>
+        and a minimal user message ("VERIFIED PROBLEM INPUT:"
+        followed by the verified text)
 [11] Answer lands in the AI Pane chat
 [12] Every assistant message exposes:
         Copy LaTeX | Copy v12 Text | Copy for Word (MathML)
@@ -225,7 +225,7 @@ Current prompt registry:
 Rules:
 
 - **Solve always uses the full Math v12 body** (ported verbatim from v1.6.6 `src/features/pipeline/presets.ts` "solve" preset). Not a summary. Not a paraphrase. Not "you remember v12, right?"
-- **`buildMathV12UserMessage(verified)` is the only path to the user message.** It wraps the verified input in `<VERIFIED_PROBLEM>…</VERIFIED_PROBLEM>` and prepends the "Here is the ENTIRE verified problem…" preamble.
+- **`buildMathV12UserMessage(verified)` is the only path to the user message.** It prepends a minimal `VERIFIED PROBLEM INPUT:` heading to the verified text — no decorative wrapper tags, no "ENTIRE verified problem" preamble.
 - **View Prompt** must show the exact bytes that will be sent (system + user, with the current Verified Input already injected for Math v12).
 - **Copy Prompt** must write the same exact bytes to the clipboard.
 - **Prompt version labels** appear: in the AI Pane diagnostics strip, in the per-job settings header, and as `prompt <version>` meta on every chat entry.

@@ -299,6 +299,8 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
   const [paneWidth, setPaneWidth] = useState<number>(initial.paneWidth);
   const [mode, setMode] = useState<Mode>(initial.mode);
   const [showSettings, setShowSettings] = useState(initial.showSettings);
+  const [recentlySaved, setRecentlySaved] = useState(false);
+  const recentlySavedTimer = useRef<number | null>(null);
   const [ai, setAi] = useState<AiConfig>(initial.ai);
 
   const [captured, setCaptured] = useState<CapturedImage | null>(null);
@@ -575,6 +577,31 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
     setTimeout(() => generalPromptRef.current?.focus(), 0);
   }, []);
 
+  /* ─── explicit Save (settings drawer) ─────────────────────────── */
+
+  /** AI Settings auto-save on every edit through the useEffect persist
+   *  pipeline. The explicit Save button is preserved per spec: it gives
+   *  Dan a visible commit affordance + a confirmation toast that the
+   *  current Provider / Base URL / API Key / Model are durable on this
+   *  device. We force the persist call here so the save flushes even if
+   *  React happened to batch a pending state update. We never log the
+   *  API key. */
+  const onSaveSettings = useCallback(() => {
+    savePersisted({
+      paneOpen, paneWidth, mode, showSettings, ai,
+      verifiedInput, mathLog,
+      generalDraft, generalLog,
+    });
+    setRecentlySaved(true);
+    onToast?.('AI settings saved on this device.');
+    if (recentlySavedTimer.current !== null) {
+      window.clearTimeout(recentlySavedTimer.current);
+    }
+    recentlySavedTimer.current = window.setTimeout(() => {
+      setRecentlySaved(false);
+    }, 1500);
+  }, [paneOpen, paneWidth, mode, showSettings, ai, verifiedInput, mathLog, generalDraft, generalLog, onToast]);
+
   /* ─── copy actions ───────────────────────────────────────────── */
 
   const onCopyForWord = useCallback(async (text: string) => {
@@ -656,6 +683,16 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
             API keys are stored locally on this device. For shared/hosted
             deployments, route calls through a server proxy instead.
           </p>
+          <footer className="noteometry-mm-settings-footer">
+            <button
+              type="button"
+              className={`noteometry-mm-secondary noteometry-mm-secondary-primary${recentlySaved ? ' is-confirmed' : ''}`}
+              onClick={onSaveSettings}
+              title="Save AI settings on this device"
+            >
+              {recentlySaved ? 'Saved ✓' : 'Save'}
+            </button>
+          </footer>
         </section>
       )}
 
