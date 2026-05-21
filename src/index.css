@@ -41,6 +41,10 @@ button {
   left: 0;
   right: 0;
   bottom: 0;
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
   /* Engineering graph paper: battleship grey base, 1/8" (12px) minor grid,
    * 1" (96px) major grid. Treats 1 CSS in = 96px. Layered linear-gradients
    * draw the lines; tldraw's own background is overridden to transparent
@@ -64,6 +68,10 @@ button {
 .noteometry-canvas-shell .tl-background,
 .noteometry-canvas-shell .tl-canvas {
   background: transparent !important;
+}
+
+.noteometry-canvas-shell .tl-container {
+  touch-action: none;
 }
 
 /* When the section/tab bar is present the canvas starts below it. */

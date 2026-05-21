@@ -90,6 +90,13 @@ export default function App() {
     setCurrentTool(e.getCurrentToolId());
   }, []);
 
+  const setCanvasTool = useCallback((id: 'draw' | 'eraser' | 'select') => {
+    if (!editor) return;
+    editor.setCurrentTool(id);
+    editor.updateInstanceState({ isToolLocked: id === 'draw' || id === 'eraser' });
+    setCurrentTool(id);
+  }, [editor]);
+
   /** Spawn a Drop-In™ at a shell-relative coordinate. Per Law 2 the canvas
    *  never gets a raw tldraw shape for Text / Table / Math / Chat — those
    *  are Drop-Ins™ rendered above the canvas by `DropInHost`. */
@@ -203,7 +210,6 @@ export default function App() {
     e.stopPropagation();
     if (!editor) return;
 
-    const setTool = (id: string) => editor.setCurrentTool(id);
     const tick = (id: string) => currentTool === id ? '✓' : '';
     // Snapshot the right-click coords; menu items fire after the synthetic
     // event has been pooled.
@@ -212,11 +218,11 @@ export default function App() {
 
     const items: ContextMenuItem[] = [
       { label: 'Drawing', header: true, accent: ACCENT_DRAWING },
-      { label: 'Pen', iconNode: <PenIcon />, accent: ACCENT_DRAWING, shortcut: tick('draw'), onClick: () => setTool('draw') },
-      { label: 'Eraser', iconNode: <EraserIcon />, accent: ACCENT_DRAWING, shortcut: tick('eraser'), onClick: () => setTool('eraser') },
+      { label: 'Pen', iconNode: <PenIcon />, accent: ACCENT_DRAWING, shortcut: tick('draw'), onClick: () => setCanvasTool('draw') },
+      { label: 'Eraser', iconNode: <EraserIcon />, accent: ACCENT_DRAWING, shortcut: tick('eraser'), onClick: () => setCanvasTool('eraser') },
 
       { label: 'Select', header: true, accent: ACCENT_SELECT },
-      { label: 'Select / Lasso', iconNode: <CursorIcon />, accent: ACCENT_SELECT, shortcut: tick('select'), onClick: () => setTool('select') },
+      { label: 'Select / Lasso', iconNode: <CursorIcon />, accent: ACCENT_SELECT, shortcut: tick('select'), onClick: () => setCanvasTool('select') },
 
       { label: 'Drop-Ins', header: true, accent: ACCENT_DROPINS },
       { label: 'Text', iconNode: <TextIcon />, accent: ACCENT_DROPINS, onClick: () => spawnDropIn('text', spawnX, spawnY) },
@@ -233,7 +239,7 @@ export default function App() {
     ];
 
     setCtxMenu({ x: e.clientX, y: e.clientY, items });
-  }, [editor, currentTool, spawnDropIn, exportPng]);
+  }, [editor, currentTool, setCanvasTool, spawnDropIn, exportPng]);
 
   // tldraw's persistenceKey is the per-page store key. Using it as React
   // key too forces a clean remount when the active page changes, which is
