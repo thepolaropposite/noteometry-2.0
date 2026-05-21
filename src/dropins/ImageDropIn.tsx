@@ -43,13 +43,6 @@ export default function ImageDropIn({ pageId, dropInId, state }: Props) {
               spellCheck={false}
               aria-label="Image description"
             />
-            <button
-              type="button"
-              className="noteometry-dropin-action"
-              onClick={() => updateImageState(pageId, dropInId, { src: '', alt: '' })}
-            >
-              Replace
-            </button>
           </div>
         </>
       ) : (

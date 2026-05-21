@@ -83,9 +83,8 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
     if (rect.left < 8) el.style.left = "8px";
   }, [x, y]);
 
-  const handleRowClick = useCallback((e: React.PointerEvent, item: ContextMenuItem) => {
+  const handleRowClick = useCallback((item: ContextMenuItem) => {
     if (item.disabled || item.header || item.separator) return;
-    e.stopPropagation();
     item.onClick?.();
     onClose();
   }, [onClose]);
@@ -125,7 +124,11 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
               (item.iconNode || item.icon) ? "has-icon-tile" : "",
             ].filter(Boolean).join(" ")}
             disabled={item.disabled}
-            onPointerUp={(e) => handleRowClick(e, item)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRowClick(item);
+            }}
           >
             {(item.iconNode || item.icon) && (
               <span

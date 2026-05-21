@@ -13,8 +13,8 @@
  *
  * Reliability:
  *   - We watch `<iframe>` load for ~1.5 s; if it never fires, we show
- *     a clean in-card error with "Replace" and "Open in new tab" so the
- *     user always has a way forward.
+ *     a clean in-card error with "Open in new tab" so the user always
+ *     has a way forward.
  */
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useState } from 'react';
@@ -65,7 +65,7 @@ export default function PdfDropIn({ pageId, dropInId, state }: Props) {
     if (state.src.startsWith('data:')) {
       const blob = dataUrlToBlob(state.src);
       if (!blob) {
-        setError('Stored PDF data is unreadable. Replace it to continue.');
+        setError('Stored PDF data is unreadable. Clear it and upload again.');
         setViewerUrl(null);
         return;
       }
@@ -156,15 +156,6 @@ export default function PdfDropIn({ pageId, dropInId, state }: Props) {
                 Open in new tab
               </a>
             )}
-            <label className="noteometry-dropin-action">
-              <input
-                type="file"
-                accept="application/pdf"
-                onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-                style={{ display: 'none' }}
-              />
-              Replace PDF
-            </label>
             <button type="button" className="noteometry-dropin-action" onClick={clearSrc}>
               Clear
             </button>
@@ -181,9 +172,6 @@ export default function PdfDropIn({ pageId, dropInId, state }: Props) {
           >
             Open in new tab
           </a>
-          <button type="button" className="noteometry-dropin-action" onClick={clearSrc}>
-            Replace
-          </button>
         </div>
       )}
     </div>

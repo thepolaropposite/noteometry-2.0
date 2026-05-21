@@ -5,7 +5,6 @@ import ContextMenu, { type ContextMenuItem } from './components/ContextMenu';
 import MathMessagePane, { type MathMessagePaneHandle } from './components/MathMessagePane';
 import SectionTabs from './components/SectionTabs';
 import PageRail from './components/PageRail';
-import ZoomControl from './components/ZoomControl';
 import MathPalette, { type PaletteStamp } from './components/MathPalette';
 import {
   PenIcon, EraserIcon, CursorIcon, TextIcon, TableIcon, MathIcon,
@@ -80,6 +79,23 @@ export default function App() {
     return () => { unsubscribe(); };
   }, [editor]);
 
+  useEffect(() => {
+    if (!editor) return;
+    const clearPenMode = () => {
+      if (editor.getInstanceState().isPenMode) {
+        editor.updateInstanceState({ isPenMode: false });
+      }
+    };
+    const onPointerUp = () => window.setTimeout(clearPenMode, 0);
+    const onPointerCancel = () => window.setTimeout(clearPenMode, 0);
+    window.addEventListener('pointerup', onPointerUp, true);
+    window.addEventListener('pointercancel', onPointerCancel, true);
+    return () => {
+      window.removeEventListener('pointerup', onPointerUp, true);
+      window.removeEventListener('pointercancel', onPointerCancel, true);
+    };
+  }, [editor]);
+
   const handleMount = useCallback((e: Editor) => {
     setEditor(e);
     // tldraw's internal grid is disabled — Noteometry paints its own
@@ -92,8 +108,12 @@ export default function App() {
 
   const setCanvasTool = useCallback((id: 'draw' | 'eraser' | 'select') => {
     if (!editor) return;
+    editor.complete();
     editor.setCurrentTool(id);
-    editor.updateInstanceState({ isToolLocked: id === 'draw' || id === 'eraser' });
+    editor.updateInstanceState({
+      isPenMode: false,
+      isToolLocked: id === 'draw' || id === 'eraser',
+    });
     setCurrentTool(id);
   }, [editor]);
 
@@ -294,8 +314,6 @@ export default function App() {
         onPaneOpenChange={setMmPaneOpen}
         onToast={showToast}
       />
-
-      <ZoomControl editor={editor} />
 
       {toast && <div className="noteometry-toast" role="status">{toast}</div>}
 
