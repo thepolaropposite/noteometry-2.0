@@ -381,7 +381,9 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
       const mixed = await captureMixedSelection();
       if (mixed) {
         setCaptured(mixed);
-        onToast?.(`Captured screenshot region with ${mixed.shapeCount} item${mixed.shapeCount === 1 ? '' : 's'}.`);
+        onToast?.(mixed.shapeCount > 0
+          ? `Captured screenshot region with ${mixed.shapeCount} item${mixed.shapeCount === 1 ? '' : 's'}.`
+          : 'Captured screenshot region.');
         return mixed;
       }
     }

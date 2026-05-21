@@ -157,6 +157,55 @@ function itemHitTest(item: CanvasItem, point: CanvasPoint, tolerance = 12): bool
   return false;
 }
 
+function drawCanvasItemsToContext(
+  ctx: CanvasRenderingContext2D,
+  items: CanvasItem[],
+  crop: { x: number; y: number },
+  scaleX: number,
+  scaleY: number
+) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const item of items) {
+    if (item.type === 'stroke') {
+      if (item.points.length === 0) continue;
+      ctx.beginPath();
+      const first = item.points[0];
+      ctx.moveTo((first.x - crop.x) * scaleX, (first.y - crop.y) * scaleY);
+      if (item.points.length === 1) {
+        ctx.lineTo((first.x - crop.x + 0.01) * scaleX, (first.y - crop.y + 0.01) * scaleY);
+      } else if (item.points.length === 2) {
+        const second = item.points[1];
+        ctx.lineTo((second.x - crop.x) * scaleX, (second.y - crop.y) * scaleY);
+      } else {
+        for (let i = 1; i < item.points.length - 1; i += 1) {
+          const current = item.points[i];
+          const next = item.points[i + 1];
+          ctx.quadraticCurveTo(
+            (current.x - crop.x) * scaleX,
+            (current.y - crop.y) * scaleY,
+            ((current.x + next.x) / 2 - crop.x) * scaleX,
+            ((current.y + next.y) / 2 - crop.y) * scaleY
+          );
+        }
+        const last = item.points[item.points.length - 1];
+        ctx.lineTo((last.x - crop.x) * scaleX, (last.y - crop.y) * scaleY);
+      }
+      ctx.strokeStyle = item.color;
+      ctx.lineWidth = item.size * ((scaleX + scaleY) / 2);
+      ctx.stroke();
+    } else {
+      const fontSize = item.size === 'large' ? 34 : 22;
+      ctx.fillStyle = item.color;
+      ctx.font = `650 ${fontSize * scaleY}px "Times New Roman", Cambria, serif`;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(item.text, (item.x - crop.x) * scaleX, (item.y - crop.y) * scaleY);
+    }
+  }
+  ctx.restore();
+}
+
 export default function App() {
   const [currentTool, setCurrentTool] = useState<ToolMode>('select');
   const [toast, setToast] = useState<string | null>(null);
@@ -175,6 +224,7 @@ export default function App() {
     [activePageId]: readCanvasItems(activePageId),
   }));
   const [selectedIdsByPage, setSelectedIdsByPage] = useState<Record<string, string[]>>({});
+  const [selectionRectsByPage, setSelectionRectsByPage] = useState<Record<string, Rect | null>>({});
   const [isCapturingCanvas, setIsCapturingCanvas] = useState(false);
   const canvasItems = itemsByPage[activePageId] ?? readCanvasItems(activePageId);
   const selectedItemIds = useMemo(
@@ -188,6 +238,8 @@ export default function App() {
   );
 
   const selectedBounds = useMemo(() => boundsForItems(selectedItems), [selectedItems]);
+  const activeSelectionRect = selectionRectsByPage[activePageId] ?? null;
+  const visibleSelectionRect = activeSelectionRect ?? selectedBounds;
 
   const showToast = useCallback((msg: string, ms = 2400) => {
     setToast(msg);
@@ -212,6 +264,10 @@ export default function App() {
 
   const setActiveSelectedItemIds = useCallback((ids: Set<string>) => {
     setSelectedIdsByPage((prev) => ({ ...prev, [activePageId]: [...ids] }));
+  }, [activePageId]);
+
+  const setActiveSelectionRect = useCallback((rect: Rect | null) => {
+    setSelectionRectsByPage((prev) => ({ ...prev, [activePageId]: rect }));
   }, [activePageId]);
 
   const setCanvasTool = useCallback((id: ToolMode) => {
@@ -284,21 +340,27 @@ export default function App() {
   const captureMixedSelection = useCallback(async (): Promise<MixedCapture | null> => {
     if (!canvasShellRef.current) return null;
     const shell = canvasShellRef.current;
-    const targetItems = selectedItems.length > 0 ? selectedItems : canvasItems;
-    if (targetItems.length === 0) return null;
-    const bounds = boundsForItems(targetItems);
+    const bounds = activeSelectionRect
+      ?? boundsForItems(selectedItems.length > 0 ? selectedItems : canvasItems);
     if (!bounds) return null;
+    const targetItems = canvasItems.filter((item) => rectsIntersect(boundsForItem(item), bounds));
+    if (!activeSelectionRect && targetItems.length === 0) return null;
     const shellRect = shell.getBoundingClientRect();
-    const pad = 16;
+    const pad = activeSelectionRect ? 0 : 16;
+    const cropX = Math.max(0, bounds.x - pad);
+    const cropY = Math.max(0, bounds.y - pad);
+    const cropRight = Math.min(shellRect.width, bounds.x + bounds.w + pad);
+    const cropBottom = Math.min(shellRect.height, bounds.y + bounds.h + pad);
     const crop = {
-      x: Math.max(0, bounds.x - pad),
-      y: Math.max(0, bounds.y - pad),
-      width: Math.min(shellRect.width, bounds.w + pad * 2),
-      height: Math.min(shellRect.height, bounds.h + pad * 2),
+      x: cropX,
+      y: cropY,
+      width: Math.max(1, cropRight - cropX),
+      height: Math.max(1, cropBottom - cropY),
     };
     setIsCapturingCanvas(true);
     try {
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const fullDataUrl = await toPng(shell, {
         cacheBust: true,
         pixelRatio: 2,
@@ -306,7 +368,8 @@ export default function App() {
         filter: (node) => {
           if (!(node instanceof Element)) return true;
           return !node.classList.contains('noteometry-stamp-overlay')
-            && !node.classList.contains('noteometry-selection-overlay');
+            && !node.classList.contains('noteometry-selection-overlay')
+            && !node.classList.contains('noteometry-ink-canvas');
         },
       });
       const img = new Image();
@@ -333,6 +396,7 @@ export default function App() {
         canvas.width,
         canvas.height
       );
+      drawCanvasItemsToContext(ctx, targetItems, crop, scaleX, scaleY);
       return {
         dataUrl: canvas.toDataURL('image/png'),
         width: canvas.width,
@@ -346,7 +410,7 @@ export default function App() {
     } finally {
       setIsCapturingCanvas(false);
     }
-  }, [canvasItems, selectedItems]);
+  }, [activeSelectionRect, canvasItems, selectedItems]);
 
   const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -444,8 +508,9 @@ export default function App() {
           onItemsChange={setActiveCanvasItems}
           tool={currentTool}
           selectedItemIds={selectedItemIds}
-          selectedBounds={selectedBounds}
+          selectedBounds={visibleSelectionRect}
           onSelectionChange={setActiveSelectedItemIds}
+          onSelectionRectChange={setActiveSelectionRect}
           onPointerPosition={(point) => { lastCanvasPointRef.current = point; }}
           hideSelection={isCapturingCanvas}
         />
@@ -507,6 +572,7 @@ function InkCanvas({
   selectedItemIds,
   selectedBounds,
   onSelectionChange,
+  onSelectionRectChange,
   onPointerPosition,
   hideSelection,
 }: {
@@ -516,6 +582,7 @@ function InkCanvas({
   selectedItemIds: Set<string>;
   selectedBounds: Rect | null;
   onSelectionChange: (ids: Set<string>) => void;
+  onSelectionRectChange: (rect: Rect | null) => void;
   onPointerPosition: (point: CanvasPoint) => void;
   hideSelection: boolean;
 }) {
@@ -553,12 +620,14 @@ function InkCanvas({
         size: e.pointerType === 'pen' ? 3.5 : 4.25,
       });
       onSelectionChange(new Set());
+      onSelectionRectChange(null);
     } else if (tool === 'select') {
       setDraftSelection({ start: point, current: point });
     } else {
+      onSelectionRectChange(null);
       eraseAt(point);
     }
-  }, [eraseAt, onPointerPosition, onSelectionChange, pointFromEvent, tool]);
+  }, [eraseAt, onPointerPosition, onSelectionChange, onSelectionRectChange, pointFromEvent, tool]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     const point = pointFromEvent(e);
@@ -597,9 +666,10 @@ function InkCanvas({
         if (rectsIntersect(boundsForItem(item), rect)) next.add(item.id);
       }
       onSelectionChange(next);
+      onSelectionRectChange(rect);
       setDraftSelection(null);
     }
-  }, [draftSelection, draftStroke, items, onItemsChange, onSelectionChange, pointFromEvent, tool]);
+  }, [draftSelection, draftStroke, items, onItemsChange, onSelectionChange, onSelectionRectChange, pointFromEvent, tool]);
 
   const selectionRect = draftSelection ? normalizeRect(draftSelection.start, draftSelection.current) : selectedBounds;
 
