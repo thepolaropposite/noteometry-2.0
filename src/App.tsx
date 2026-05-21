@@ -1,26 +1,18 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Tldraw, Editor, createShapeId, toRichText, type TLEditorSnapshot } from 'tldraw';
 import { toPng } from 'html-to-image';
 import 'tldraw/tldraw.css';
-import ContextMenu, { type ContextMenuItem } from './components/ContextMenu';
 import MathMessagePane, { type MathMessagePaneHandle } from './components/MathMessagePane';
 import SectionTabs from './components/SectionTabs';
 import PageRail from './components/PageRail';
 import MathPalette, { type PaletteStamp } from './components/MathPalette';
 import {
-  PenIcon, EraserIcon, CursorIcon, TextIcon, TableIcon, MathIcon,
-  ImageIcon, PdfIcon, MathPaletteIcon, ExportIcon,
+  PenIcon, CursorIcon, MathIcon,
 } from './components/Icons';
 import { useNoteometryNav } from './lib/useNoteometryNav';
 import DropInHost from './dropins/DropInHost';
-import { addDropIn, addImageDropIn } from './dropins/dropInStore';
-import type { DropInType } from './dropins/types';
+import { addImageDropIn } from './dropins/dropInStore';
 
-const ACCENT_DRAWING = '#5aa0e8';
-const ACCENT_SELECT = '#c08fff';
-const ACCENT_DROPINS = '#6ed18c';
-const ACCENT_MATH = '#f3ba5b';
-const ACCENT_EXPORT = '#8b95a5';
 const CANVAS_BACKUP_PREFIX = 'noteometry-os:canvas-backup:v1:';
 
 interface CanvasBackup {
@@ -53,17 +45,6 @@ class OSBoundary extends React.Component<{ children: React.ReactNode }, { error:
   }
 }
 
-function typeLabel(type: DropInType): string {
-  switch (type) {
-    case 'text': return 'Text Drop-In™';
-    case 'table': return 'Table Drop-In™';
-    case 'math': return 'Math Drop-In™';
-    case 'chat': return 'Chat Drop-In™';
-    case 'image': return 'Image Drop-In™';
-    case 'pdf': return 'PDF Drop-In™';
-  }
-}
-
 function readCanvasBackup(pageId: string): CanvasBackup | null {
   try {
     const raw = localStorage.getItem(`${CANVAS_BACKUP_PREFIX}${pageId}`);
@@ -76,7 +57,6 @@ function readCanvasBackup(pageId: string): CanvasBackup | null {
 export default function App() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [currentTool, setCurrentTool] = useState<string>('select');
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [mmPaneOpen, setMmPaneOpen] = useState<boolean>(true);
   const [pageRailOpen, setPageRailOpen] = useState<boolean>(false);
@@ -87,7 +67,10 @@ export default function App() {
   const [mathPaletteOpen, setMathPaletteOpen] = useState<boolean>(false);
   const [paletteStamp, setPaletteStamp] = useState<PaletteStamp | null>(null);
   const nav = useNoteometryNav();
-  const canvasSnapshot = readCanvasBackup(nav.activePage.id)?.snapshot;
+  const canvasSnapshot = useMemo(
+    () => readCanvasBackup(nav.activePage.id)?.snapshot,
+    [nav.activePage.id]
+  );
 
   const showToast = useCallback((msg: string, ms = 2400) => {
     setToast(msg);
@@ -152,23 +135,6 @@ export default function App() {
         console.warn('[Noteometry] canvas backup failed', err);
       }
     };
-    const restoreIfBlank = () => {
-      const backup = readBackup();
-      if (!backup || backup.shapeCount === 0) return;
-      if (currentShapeCount() > 0) return;
-      try {
-        editor.loadSnapshot(backup.snapshot);
-        showToast('Restored canvas from Noteometry backup.');
-      } catch (err) {
-        console.warn('[Noteometry] canvas restore failed', err);
-      }
-    };
-
-    const restoreTimers = [
-      window.setTimeout(restoreIfBlank, 1200),
-      window.setTimeout(restoreIfBlank, 4200),
-      window.setTimeout(restoreIfBlank, 7000),
-    ];
     let saveTimer: number | null = null;
     const unsubscribe = editor.store.listen(() => {
       if (saveTimer !== null) window.clearTimeout(saveTimer);
@@ -176,11 +142,10 @@ export default function App() {
     });
     saveBackup();
     return () => {
-      restoreTimers.forEach((t) => window.clearTimeout(t));
       if (saveTimer !== null) window.clearTimeout(saveTimer);
       unsubscribe();
     };
-  }, [editor, nav.activePage.id, showToast]);
+  }, [editor, nav.activePage.id]);
 
   const setCanvasTool = useCallback((id: 'draw' | 'eraser' | 'select') => {
     if (!editor) return;
@@ -192,19 +157,6 @@ export default function App() {
     });
     setCurrentTool(id);
   }, [editor]);
-
-  /** Spawn a Drop-In™ at a shell-relative coordinate. Per Law 2 the canvas
-   *  never gets a raw tldraw shape for Text / Table / Math / Chat — those
-   *  are Drop-Ins™ rendered above the canvas by `DropInHost`. */
-  const spawnDropIn = useCallback((type: DropInType, clientX: number, clientY: number) => {
-    const shell = canvasShellRef.current;
-    if (!shell) return;
-    const rect = shell.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-    addDropIn(nav.activePage.id, type, x, y);
-    showToast(`${typeLabel(type)} inserted.`);
-  }, [nav.activePage.id, showToast]);
 
   const shellPointFromClient = useCallback((clientX: number, clientY: number) => {
     const shell = canvasShellRef.current;
@@ -267,34 +219,6 @@ export default function App() {
     });
     showToast(`Stamped "${paletteStamp.symbol}" (${paletteStamp.size}).`);
   }, [editor, paletteStamp, showToast]);
-
-  /** Export current page as a PNG download. If shapes are selected, only
-   *  those export; otherwise everything on the page. */
-  const exportPng = useCallback(async () => {
-    if (!editor) return;
-    const selected = editor.getSelectedShapeIds();
-    const idArray = selected.length > 0
-      ? selected
-      : Array.from(editor.getCurrentPageShapeIds());
-    if (idArray.length === 0) {
-      showToast('Nothing to export.');
-      return;
-    }
-    try {
-      const result = await editor.toImageDataUrl(idArray, { format: 'png', scale: 2, padding: 16, background: true } as Parameters<Editor['toImageDataUrl']>[1]);
-      if (!result?.url) throw new Error('Empty export');
-      const a = document.createElement('a');
-      a.href = result.url;
-      a.download = `${nav.activePage.title.replace(/[^\w-]+/g, '_')}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      showToast('Exported PNG.');
-    } catch (err) {
-      console.error('[Noteometry] PNG export failed:', err);
-      showToast(`Export failed: ${(err as Error).message}`);
-    }
-  }, [editor, nav.activePage.title, showToast]);
 
   const captureMixedSelection = useCallback(async (): Promise<MixedCapture | null> => {
     if (!editor || !canvasShellRef.current) return null;
@@ -366,47 +290,6 @@ export default function App() {
     }
   }, [editor]);
 
-  /** Build the FLAT right-click context menu. Per Dan's ADHD rule: every
-   *  command is visible at once — no submenus, no flyouts, no hover-reveal.
-   *  Section headers are visual group labels only. This is the entire tool
-   *  surface of the app; there is no toolbar, HUD, or launcher anywhere
-   *  else on screen. */
-  const handleCanvasContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!editor) return;
-
-    const tick = (id: string) => currentTool === id ? '✓' : '';
-    // Snapshot the right-click coords; menu items fire after the synthetic
-    // event has been pooled.
-    const spawnX = e.clientX;
-    const spawnY = e.clientY;
-
-    const items: ContextMenuItem[] = [
-      { label: 'Drawing', header: true, accent: ACCENT_DRAWING },
-      { label: 'Pen', iconNode: <PenIcon />, accent: ACCENT_DRAWING, shortcut: tick('draw'), onClick: () => setCanvasTool('draw') },
-      { label: 'Eraser', iconNode: <EraserIcon />, accent: ACCENT_DRAWING, shortcut: tick('eraser'), onClick: () => setCanvasTool('eraser') },
-
-      { label: 'Select', header: true, accent: ACCENT_SELECT },
-      { label: 'Select / Lasso', iconNode: <CursorIcon />, accent: ACCENT_SELECT, shortcut: tick('select'), onClick: () => setCanvasTool('select') },
-
-      { label: 'Drop-Ins', header: true, accent: ACCENT_DROPINS },
-      { label: 'Text', iconNode: <TextIcon />, accent: ACCENT_DROPINS, onClick: () => spawnDropIn('text', spawnX, spawnY) },
-      { label: 'Table', iconNode: <TableIcon />, accent: ACCENT_DROPINS, onClick: () => spawnDropIn('table', spawnX, spawnY) },
-      { label: 'Math', iconNode: <MathIcon />, accent: ACCENT_DROPINS, onClick: () => spawnDropIn('math', spawnX, spawnY) },
-      { label: 'Image', iconNode: <ImageIcon />, accent: ACCENT_DROPINS, onClick: () => spawnDropIn('image', spawnX, spawnY) },
-      { label: 'PDF', iconNode: <PdfIcon />, accent: ACCENT_DROPINS, onClick: () => spawnDropIn('pdf', spawnX, spawnY) },
-
-      { label: 'Math', header: true, accent: ACCENT_MATH },
-      { label: 'Math Palette', iconNode: <MathPaletteIcon />, accent: ACCENT_MATH, onClick: () => setMathPaletteOpen(true) },
-
-      { label: 'Export', header: true, accent: ACCENT_EXPORT },
-      { label: 'Export PNG', iconNode: <ExportIcon />, accent: ACCENT_EXPORT, onClick: () => { void exportPng(); } },
-    ];
-
-    setCtxMenu({ x: e.clientX, y: e.clientY, items });
-  }, [editor, currentTool, setCanvasTool, spawnDropIn, exportPng]);
-
   // The React key forces a clean remount when the active page changes.
   // Noteometry owns the page snapshot now; tldraw's IndexedDB persistence
   // loaded late enough to overwrite fresh ink after reload.
@@ -419,7 +302,7 @@ export default function App() {
       <div
         ref={canvasShellRef}
         className="noteometry-canvas-shell"
-        onContextMenu={handleCanvasContextMenu}
+        onContextMenu={(e) => e.preventDefault()}
         onPointerMove={(e) => {
           lastCanvasPointRef.current = shellPointFromClient(e.clientX, e.clientY);
         }}
@@ -496,17 +379,6 @@ export default function App() {
       />
 
       {toast && <div className="noteometry-toast" role="status">{toast}</div>}
-
-      {ctxMenu && (
-        <OSBoundary>
-          <ContextMenu
-            x={ctxMenu.x}
-            y={ctxMenu.y}
-            items={ctxMenu.items}
-            onClose={() => setCtxMenu(null)}
-          />
-        </OSBoundary>
-      )}
 
       <MathPalette
         open={mathPaletteOpen}
