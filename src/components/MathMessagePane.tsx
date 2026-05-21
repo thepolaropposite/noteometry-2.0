@@ -369,9 +369,14 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
 
   const captureSelection = useCallback(async (): Promise<CapturedImage | null> => {
     if (!editor) { onToast?.('Canvas not ready yet.'); return null; }
-    const ids = editor.getSelectedShapeIds();
+    let ids = editor.getSelectedShapeIds();
+    let usedFallback = false;
     if (ids.length === 0) {
-      onToast?.('Select shapes with the Lasso / Select tool first, then Capture.');
+      ids = Array.from(editor.getCurrentPageShapeIds());
+      usedFallback = ids.length > 0;
+    }
+    if (ids.length === 0) {
+      onToast?.('Nothing to read yet. Add ink or select shapes first.');
       return null;
     }
     try {
@@ -387,7 +392,9 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
         shapeCount: ids.length,
       };
       setCaptured(shot);
-      onToast?.(`Captured ${ids.length} shape${ids.length === 1 ? '' : 's'}.`);
+      onToast?.(usedFallback
+        ? `No lasso selection; captured ${ids.length} page shape${ids.length === 1 ? '' : 's'}.`
+        : `Captured ${ids.length} shape${ids.length === 1 ? '' : 's'}.`);
       return shot;
     } catch (e) {
       onToast?.(`Capture failed: ${(e as Error).message}`);

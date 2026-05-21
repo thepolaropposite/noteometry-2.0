@@ -306,6 +306,39 @@ export default function App() {
         )}
       </div>
 
+      <div className="noteometry-tool-strip" aria-label="Core tools">
+        <button
+          type="button"
+          className={`noteometry-tool-strip-btn${currentTool === 'draw' ? ' is-active' : ''}`}
+          onClick={() => setCanvasTool('draw')}
+          title="Ink"
+          aria-label="Ink"
+        >
+          <PenIcon />
+          <span>Ink</span>
+        </button>
+        <button
+          type="button"
+          className={`noteometry-tool-strip-btn${currentTool === 'select' ? ' is-active' : ''}`}
+          onClick={() => setCanvasTool('select')}
+          title="Lasso"
+          aria-label="Lasso"
+        >
+          <CursorIcon />
+          <span>Lasso</span>
+        </button>
+        <button
+          type="button"
+          className="noteometry-tool-strip-btn noteometry-tool-strip-read"
+          onClick={() => { void paneRef.current?.readMath(); }}
+          title="Read Math"
+          aria-label="Read Math"
+        >
+          <MathIcon />
+          <span>Read</span>
+        </button>
+      </div>
+
       <PageRail nav={nav} onCollapsedChange={(collapsed) => setPageRailOpen(!collapsed)} />
 
       <MathMessagePane

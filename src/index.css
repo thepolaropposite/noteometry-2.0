@@ -291,53 +291,63 @@ button {
 }
 
 /* ───────────────────────────────────────────────────────────────
- * Zoom control (bottom-right, above the canvas, offset to avoid
- * the page rail / AI pane).
+ * Core tool strip.
  * ─────────────────────────────────────────────────────────────── */
 
-.noteometry-zoom-control {
+.noteometry-tool-strip {
   position: absolute;
-  /* 16 px breathing room + whatever the rail currently occupies. */
-  right: calc(16px + var(--nm-page-rail-width));
-  bottom: 14px;
-  z-index: 1000;
+  left: 16px;
+  bottom: 18px;
+  z-index: 1020;
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
-  background: rgba(22, 22, 28, 0.86);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  background: rgba(18, 18, 24, 0.9);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
   backdrop-filter: blur(12px);
 }
 
-.noteometry-os.has-mm-pane .noteometry-zoom-control {
-  right: calc(16px + var(--nm-page-rail-width) + var(--nm-mm-pane-width));
-}
-
-.noteometry-zoom-control button {
-  width: 30px;
-  height: 30px;
+.noteometry-tool-strip-btn {
+  min-width: 76px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   cursor: pointer;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
   font-weight: 700;
-  line-height: 1;
+  letter-spacing: 0.02em;
 }
 
-.noteometry-zoom-control button:hover {
-  background: rgba(142, 162, 255, 0.16);
+.noteometry-tool-strip-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.noteometry-tool-strip-btn:hover,
+.noteometry-tool-strip-btn.is-active {
+  border-color: rgba(142, 162, 255, 0.48);
+  background: rgba(90, 160, 232, 0.18);
   color: #d6ddff;
 }
 
-.noteometry-zoom-reset {
-  width: 56px !important;
-  font-size: 11px !important;
-  letter-spacing: 0.04em;
+.noteometry-tool-strip-read {
+  background: rgba(243, 186, 91, 0.14);
+  color: #ffe1a3;
+}
+
+.noteometry-tool-strip-read:hover {
+  border-color: rgba(243, 186, 91, 0.48);
+  background: rgba(243, 186, 91, 0.22);
+  color: #fff0c8;
 }
 
 .noteometry-toast {
