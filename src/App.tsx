@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Tldraw, Editor, createShapeId, toRichText } from 'tldraw';
+import { Tldraw, Editor, createShapeId, toRichText, type TLEditorSnapshot } from 'tldraw';
 import { toPng } from 'html-to-image';
 import 'tldraw/tldraw.css';
 import ContextMenu, { type ContextMenuItem } from './components/ContextMenu';
@@ -25,7 +25,7 @@ const CANVAS_BACKUP_PREFIX = 'noteometry-os:canvas-backup:v1:';
 
 interface CanvasBackup {
   shapeCount: number;
-  snapshot: ReturnType<Editor['getSnapshot']>;
+  snapshot: TLEditorSnapshot;
   savedAt: number;
 }
 
@@ -64,6 +64,15 @@ function typeLabel(type: DropInType): string {
   }
 }
 
+function readCanvasBackup(pageId: string): CanvasBackup | null {
+  try {
+    const raw = localStorage.getItem(`${CANVAS_BACKUP_PREFIX}${pageId}`);
+    return raw ? JSON.parse(raw) as CanvasBackup : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function App() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [currentTool, setCurrentTool] = useState<string>('select');
@@ -78,6 +87,7 @@ export default function App() {
   const [mathPaletteOpen, setMathPaletteOpen] = useState<boolean>(false);
   const [paletteStamp, setPaletteStamp] = useState<PaletteStamp | null>(null);
   const nav = useNoteometryNav();
+  const canvasSnapshot = readCanvasBackup(nav.activePage.id)?.snapshot;
 
   const showToast = useCallback((msg: string, ms = 2400) => {
     setToast(msg);
@@ -125,14 +135,7 @@ export default function App() {
   useEffect(() => {
     if (!editor) return;
     const key = `${CANVAS_BACKUP_PREFIX}${nav.activePage.id}`;
-    const readBackup = (): CanvasBackup | null => {
-      try {
-        const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) as CanvasBackup : null;
-      } catch {
-        return null;
-      }
-    };
+    const readBackup = () => readCanvasBackup(nav.activePage.id);
     const currentShapeCount = () => editor.getCurrentPageShapeIds().size;
     const saveBackup = () => {
       const shapeCount = currentShapeCount();
@@ -404,9 +407,9 @@ export default function App() {
     setCtxMenu({ x: e.clientX, y: e.clientY, items });
   }, [editor, currentTool, setCanvasTool, spawnDropIn, exportPng]);
 
-  // tldraw's persistenceKey is the per-page store key. Using it as React
-  // key too forces a clean remount when the active page changes, which is
-  // exactly what we want — different page = different canvas content.
+  // The React key forces a clean remount when the active page changes.
+  // Noteometry owns the page snapshot now; tldraw's IndexedDB persistence
+  // loaded late enough to overwrite fresh ink after reload.
   const persistenceKey = `nm-page-${nav.activePage.id}`;
 
   return (
@@ -424,7 +427,7 @@ export default function App() {
         <OSBoundary>
           <Tldraw
             key={persistenceKey}
-            persistenceKey={persistenceKey}
+            snapshot={canvasSnapshot}
             hideUi
             onMount={handleMount}
           />
