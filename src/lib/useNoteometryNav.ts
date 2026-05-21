@@ -4,10 +4,10 @@
  * OneNote-style navigation state: notebook → sections → pages.
  * Persists to localStorage so refresh keeps the same active page.
  *
- * Each page's canvas content lives in App.tsx as a Noteometry-owned
- * tldraw store plus localStorage snapshot. Switching the active page
- * remounts Tldraw with that page's store, so page content stays separate
- * without tldraw's async IndexedDB persistence path.
+ * Each page's canvas content lives in App.tsx as Noteometry-owned ink
+ * records plus localStorage. Switching the active page loads that page's
+ * records, so page content stays separate without tldraw's production
+ * license gate or async IndexedDB persistence path.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { markError, markSaved, markSaving } from './saveStatus';

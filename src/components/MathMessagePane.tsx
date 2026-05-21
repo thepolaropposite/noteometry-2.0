@@ -19,8 +19,8 @@
  *
  * One active AI profile drives all remote reasoning. The production
  * direction is OpenAI through Vercel server functions so the browser
- * never holds a secret. The screenshot path is exclusively
- * editor.toImageDataUrl — no OCR, no shape JSON, no object parsing.
+ * never holds a secret. The screenshot path is exclusively a rendered
+ * canvas-region image — no OCR, no shape JSON, no object parsing.
  */
 import {
   forwardRef,
@@ -32,7 +32,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { Editor } from 'tldraw';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import ProviderJobEditor from './ProviderJobEditor';
@@ -68,6 +67,15 @@ interface CapturedImage {
   height: number;
   capturedAt: number;
   shapeCount: number;
+}
+
+interface LegacyCanvasEditor {
+  getSelectedShapeIds: () => string[];
+  getCurrentPageShapeIds: () => Set<string>;
+  toImageDataUrl: (
+    ids: string[],
+    options: { format: 'png'; scale: number; background: boolean; padding: number }
+  ) => Promise<{ url: string; width: number; height: number } | null>;
 }
 
 interface LogEntry {
@@ -281,7 +289,7 @@ export interface MathMessagePaneHandle {
 }
 
 export interface MathMessagePaneProps {
-  editor: Editor | null;
+  editor: LegacyCanvasEditor | null;
   captureMixedSelection?: () => Promise<CapturedImage | null>;
   onPaneOpenChange?: (open: boolean) => void;
   onToast?: (msg: string) => void;
@@ -369,6 +377,14 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
   /* ─── capture ────────────────────────────────────────────────── */
 
   const captureSelection = useCallback(async (): Promise<CapturedImage | null> => {
+    if (captureMixedSelection) {
+      const mixed = await captureMixedSelection();
+      if (mixed) {
+        setCaptured(mixed);
+        onToast?.(`Captured screenshot region with ${mixed.shapeCount} item${mixed.shapeCount === 1 ? '' : 's'}.`);
+        return mixed;
+      }
+    }
     if (!editor) { onToast?.('Canvas not ready yet.'); return null; }
     let ids = editor.getSelectedShapeIds();
     let usedFallback = false;
@@ -393,7 +409,7 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
     try {
       const result = await editor.toImageDataUrl(ids, {
         format: 'png', scale: 2, background: true, padding: 12,
-      } as Parameters<Editor['toImageDataUrl']>[1]);
+      });
       if (!result?.url) throw new Error('Export returned no image');
       const shot: CapturedImage = {
         dataUrl: result.url,

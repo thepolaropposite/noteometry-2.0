@@ -45,8 +45,7 @@ button {
   user-select: none;
   /* Engineering graph paper: battleship grey base, 1/8" (12px) minor grid,
    * 1" (96px) major grid. Treats 1 CSS in = 96px. Layered linear-gradients
-   * draw the lines; tldraw's own background is overridden to transparent
-   * below so this shows through. */
+   * draw the lines below Noteometry's ink layer. */
   background-color: #6f7479;
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px),
@@ -60,12 +59,53 @@ button {
     96px 96px;
 }
 
-/* Let the CSS engineering paper show through tldraw. tldraw paints its
- * own opaque background on .tl-background / .tl-canvas — we need both
- * to be transparent. */
-.noteometry-canvas-shell .tl-background,
-.noteometry-canvas-shell .tl-canvas {
-  background: transparent !important;
+.noteometry-ink-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  overflow: visible;
+  cursor: crosshair;
+}
+
+.noteometry-ink-canvas[data-tool="select"] {
+  cursor: default;
+}
+
+.noteometry-ink-canvas[data-tool="eraser"] {
+  cursor: cell;
+}
+
+.noteometry-ink-stroke {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.18));
+}
+
+.noteometry-ink-stroke.is-selected,
+.noteometry-ink-text.is-selected {
+  filter: drop-shadow(0 0 4px rgba(142, 162, 255, 0.95));
+}
+
+.noteometry-ink-text {
+  font-family: "Times New Roman", Cambria, serif;
+  font-weight: 650;
+  dominant-baseline: alphabetic;
+  user-select: none;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.18));
+}
+
+.noteometry-selection-overlay {
+  fill: rgba(142, 162, 255, 0.14);
+  stroke: rgba(214, 221, 255, 0.95);
+  stroke-width: 1.5;
+  stroke-dasharray: 7 5;
+  pointer-events: none;
 }
 
 /* When the section/tab bar is present the canvas starts below it. */
@@ -1670,7 +1710,7 @@ button {
   color: #ffe4a3;
 }
 
-/* Stamp overlay — sits above tldraw and DropInHost when a glyph is armed.
+/* Stamp overlay — sits above the ink canvas and DropInHost when a glyph is armed.
  * Captures the next click and converts it into a stamped text shape. */
 .noteometry-stamp-overlay {
   position: absolute;
