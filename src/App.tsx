@@ -3,15 +3,18 @@ import { Tldraw, Editor, createShapeId, toRichText, type TLEditorSnapshot } from
 import { toPng } from 'html-to-image';
 import 'tldraw/tldraw.css';
 import MathMessagePane, { type MathMessagePaneHandle } from './components/MathMessagePane';
+import ContextMenu, { type ContextMenuItem } from './components/ContextMenu';
 import SectionTabs from './components/SectionTabs';
 import PageRail from './components/PageRail';
 import MathPalette, { type PaletteStamp } from './components/MathPalette';
 import {
-  PenIcon, CursorIcon, MathIcon,
+  PenIcon, EraserIcon, CursorIcon, TextIcon, TableIcon, ImageIcon, PdfIcon,
+  MathPaletteIcon, MathIcon, SolveIcon,
 } from './components/Icons';
 import { useNoteometryNav } from './lib/useNoteometryNav';
 import DropInHost from './dropins/DropInHost';
-import { addImageDropIn } from './dropins/dropInStore';
+import { addDropIn, addImageDropIn } from './dropins/dropInStore';
+import type { DropInType } from './dropins/types';
 
 const CANVAS_BACKUP_PREFIX = 'noteometry-os:canvas-backup:v1:';
 
@@ -60,6 +63,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [mmPaneOpen, setMmPaneOpen] = useState<boolean>(true);
   const [pageRailOpen, setPageRailOpen] = useState<boolean>(false);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const toastTimer = useRef<number | null>(null);
   const paneRef = useRef<MathMessagePaneHandle>(null);
   const canvasShellRef = useRef<HTMLDivElement | null>(null);
@@ -164,6 +168,16 @@ export default function App() {
     const rect = shell.getBoundingClientRect();
     return { x: clientX - rect.left, y: clientY - rect.top };
   }, []);
+
+  const spawnDropIn = useCallback((type: Exclude<DropInType, 'math' | 'chat'>, point: { x: number; y: number } | null) => {
+    const shell = canvasShellRef.current;
+    const target = point ?? (shell
+      ? { x: shell.clientWidth / 2, y: shell.clientHeight / 2 }
+      : { x: 260, y: 180 });
+    addDropIn(nav.activePage.id, type, target.x, target.y);
+    const label = type === 'pdf' ? 'PDF' : `${type[0].toUpperCase()}${type.slice(1)}`;
+    showToast(`${label} Drop-In added.`);
+  }, [nav.activePage.id, showToast]);
 
   const pasteImageFile = useCallback((file: File, point?: { x: number; y: number } | null) => {
     const reader = new FileReader();
@@ -290,6 +304,85 @@ export default function App() {
     }
   }, [editor]);
 
+  const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const point = shellPointFromClient(e.clientX, e.clientY);
+    if (point) lastCanvasPointRef.current = point;
+
+    const items: ContextMenuItem[] = [
+      { label: 'Tools', header: true, accent: '#8ea2ff' },
+      {
+        label: currentTool === 'draw' ? 'Ink selected' : 'Ink',
+        iconNode: <PenIcon />,
+        accent: '#8ea2ff',
+        onClick: () => setCanvasTool('draw'),
+      },
+      {
+        label: currentTool === 'eraser' ? 'Eraser selected' : 'Eraser',
+        iconNode: <EraserIcon />,
+        accent: '#f08686',
+        onClick: () => setCanvasTool('eraser'),
+      },
+      {
+        label: currentTool === 'select' ? 'Lasso selected' : 'Lasso',
+        iconNode: <CursorIcon />,
+        accent: '#73d7b1',
+        onClick: () => setCanvasTool('select'),
+      },
+      { separator: true, label: '' },
+      { label: 'AI', header: true, accent: '#f3ba5b' },
+      {
+        label: 'Read Math',
+        iconNode: <MathIcon />,
+        accent: '#f3ba5b',
+        onClick: () => { void paneRef.current?.readMath(); },
+      },
+      {
+        label: 'Solve',
+        iconNode: <SolveIcon />,
+        accent: '#f3ba5b',
+        onClick: () => { void paneRef.current?.solveVerifiedMath(); },
+      },
+      { separator: true, label: '' },
+      { label: 'Drop-Ins', header: true, accent: '#b58cff' },
+      {
+        label: 'Text Drop-In',
+        iconNode: <TextIcon />,
+        accent: '#b58cff',
+        onClick: () => spawnDropIn('text', point),
+      },
+      {
+        label: 'Table Drop-In',
+        iconNode: <TableIcon />,
+        accent: '#b58cff',
+        onClick: () => spawnDropIn('table', point),
+      },
+      {
+        label: 'Image Drop-In',
+        iconNode: <ImageIcon />,
+        accent: '#b58cff',
+        onClick: () => spawnDropIn('image', point),
+      },
+      {
+        label: 'PDF Drop-In',
+        iconNode: <PdfIcon />,
+        accent: '#b58cff',
+        onClick: () => spawnDropIn('pdf', point),
+      },
+      { separator: true, label: '' },
+      { label: 'Math Marks', header: true, accent: '#73d7b1' },
+      {
+        label: 'Math Palette',
+        iconNode: <MathPaletteIcon />,
+        accent: '#73d7b1',
+        onClick: () => setMathPaletteOpen(true),
+      },
+    ];
+
+    setCtxMenu({ x: e.clientX, y: e.clientY, items });
+  }, [currentTool, setCanvasTool, shellPointFromClient, spawnDropIn]);
+
   // The React key forces a clean remount when the active page changes.
   // Noteometry owns the page snapshot now; tldraw's IndexedDB persistence
   // loaded late enough to overwrite fresh ink after reload.
@@ -302,7 +395,7 @@ export default function App() {
       <div
         ref={canvasShellRef}
         className="noteometry-canvas-shell"
-        onContextMenu={(e) => e.preventDefault()}
+        onContextMenu={handleCanvasContextMenu}
         onPointerMove={(e) => {
           lastCanvasPointRef.current = shellPointFromClient(e.clientX, e.clientY);
         }}
@@ -335,39 +428,6 @@ export default function App() {
         )}
       </div>
 
-      <div className="noteometry-tool-strip" aria-label="Core tools">
-        <button
-          type="button"
-          className={`noteometry-tool-strip-btn${currentTool === 'draw' ? ' is-active' : ''}`}
-          onClick={() => setCanvasTool('draw')}
-          title="Ink"
-          aria-label="Ink"
-        >
-          <PenIcon />
-          <span>Ink</span>
-        </button>
-        <button
-          type="button"
-          className={`noteometry-tool-strip-btn${currentTool === 'select' ? ' is-active' : ''}`}
-          onClick={() => setCanvasTool('select')}
-          title="Lasso"
-          aria-label="Lasso"
-        >
-          <CursorIcon />
-          <span>Lasso</span>
-        </button>
-        <button
-          type="button"
-          className="noteometry-tool-strip-btn noteometry-tool-strip-read"
-          onClick={() => { void paneRef.current?.readMath(); }}
-          title="Read Math"
-          aria-label="Read Math"
-        >
-          <MathIcon />
-          <span>Read</span>
-        </button>
-      </div>
-
       <PageRail nav={nav} onCollapsedChange={(collapsed) => setPageRailOpen(!collapsed)} />
 
       <MathMessagePane
@@ -379,6 +439,15 @@ export default function App() {
       />
 
       {toast && <div className="noteometry-toast" role="status">{toast}</div>}
+
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={ctxMenu.items}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
 
       <MathPalette
         open={mathPaletteOpen}

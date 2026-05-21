@@ -290,66 +290,6 @@ button {
   font-style: italic;
 }
 
-/* ───────────────────────────────────────────────────────────────
- * Core tool strip.
- * ─────────────────────────────────────────────────────────────── */
-
-.noteometry-tool-strip {
-  position: absolute;
-  left: 16px;
-  bottom: 18px;
-  z-index: 1020;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  background: rgba(18, 18, 24, 0.9);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
-  backdrop-filter: blur(12px);
-}
-
-.noteometry-tool-strip-btn {
-  min-width: 76px;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  cursor: pointer;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.noteometry-tool-strip-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
-.noteometry-tool-strip-btn:hover,
-.noteometry-tool-strip-btn.is-active {
-  border-color: rgba(142, 162, 255, 0.48);
-  background: rgba(90, 160, 232, 0.18);
-  color: #d6ddff;
-}
-
-.noteometry-tool-strip-read {
-  background: rgba(243, 186, 91, 0.14);
-  color: #ffe1a3;
-}
-
-.noteometry-tool-strip-read:hover {
-  border-color: rgba(243, 186, 91, 0.48);
-  background: rgba(243, 186, 91, 0.22);
-  color: #fff0c8;
-}
-
 .noteometry-toast {
   position: absolute;
   left: 50%;
