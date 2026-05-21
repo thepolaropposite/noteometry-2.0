@@ -43,6 +43,21 @@ button {
   bottom: 0;
   -webkit-user-select: none;
   user-select: none;
+  background-color: #6f7479;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  touch-action: pan-x pan-y;
+}
+
+.noteometry-canvas-shell::-webkit-scrollbar {
+  display: none;
+}
+
+.noteometry-canvas-world {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
   /* Engineering graph paper: battleship grey base, 1/8" (12px) minor grid,
    * 1" (96px) major grid. Treats 1 CSS in = 96px. Layered linear-gradients
    * draw the lines below Noteometry's ink layer. */
@@ -65,7 +80,7 @@ button {
   z-index: 5;
   width: 100%;
   height: 100%;
-  touch-action: none;
+  touch-action: pan-x pan-y;
   overflow: visible;
   cursor: crosshair;
 }
@@ -76,6 +91,7 @@ button {
 
 .noteometry-ink-canvas[data-tool="eraser"] {
   cursor: cell;
+  touch-action: none;
 }
 
 .noteometry-ink-stroke {
@@ -446,9 +462,11 @@ button {
   font-size: 13px;
   backdrop-filter: blur(14px);
   box-shadow: -12px 0 36px rgba(0, 0, 0, 0.36);
+  overflow: hidden;
 }
 
 .noteometry-mm-header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -462,6 +480,14 @@ button {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.86);
+}
+
+.noteometry-mm-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .noteometry-mm-header-actions {
@@ -686,6 +712,22 @@ button {
   background: #fff;
   color: #111;
   overflow-x: auto;
+}
+
+.noteometry-mm-input-preview {
+  min-height: 58px;
+  max-height: 220px;
+  padding: 9px 11px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: #fff;
+  color: #111;
+  line-height: 1.55;
+  overflow: auto;
+}
+
+.noteometry-mm-input-preview math {
+  font-size: 1.05em;
 }
 
 .noteometry-mm-preview-empty {
@@ -2404,6 +2446,9 @@ a.noteometry-dropin-action {
 
 .noteometry-mm-card-action {
   display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .noteometry-mm-card-action-btn {
@@ -2418,6 +2463,11 @@ a.noteometry-dropin-action {
 
 .noteometry-mm-card-action-btn:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.noteometry-mm-card-action-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 
 .noteometry-mm-card-body {

@@ -7,7 +7,7 @@
  *     1. lasso math on canvas
  *     2. Read Math: vision call with mathRead.ts prompt (transcribe only)
  *     3. result lands in editable "Verified Input" textarea
- *     4. Preview renders the input live via KaTeX
+ *     4. Verified Input renders mixed prose + LaTeX as MathML live
  *     5. Dan corrects any recognition errors
  *     6. Solve: TEXT-ONLY call with mathV12.ts system + injected input
  *     7. Answer joins the chat log with Copy-for-Word / Copy-LaTeX / Copy-plain
@@ -32,8 +32,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
 import ProviderJobEditor from './ProviderJobEditor';
 import type { AiConfig, ChatMessage, JobConfig } from '../lib/aiTypes';
 import { chatEndpointFor, defaultJobConfig, sendChat } from '../lib/aiProviders';
@@ -49,7 +47,7 @@ import {
 import { copyForWord, renderAsMathML } from '../lib/mathml';
 import { markError, markSaved, markSaving } from '../lib/saveStatus';
 import {
-  EyeIcon, SolveIcon, CameraIcon, AskIcon, TrashIcon, WordIcon,
+  EyeIcon, CameraIcon, AskIcon, TrashIcon, WordIcon,
 } from './Icons';
 
 const STORAGE_KEY = 'noteometry-os:math-message-pane:v4';
@@ -249,34 +247,9 @@ function compositeVerifiedInput(r: ReadResult): string {
   return parts.join('\n\n');
 }
 
-/* ─── LaTeX preview render (live) ────────────────────────────────── */
-
-function splitForLatex(src: string): Array<{ kind: 'text' | 'inline' | 'block'; value: string }> {
-  const out: Array<{ kind: 'text' | 'inline' | 'block'; value: string }> = [];
-  const re = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
-  let lastIdx = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(src))) {
-    if (m.index > lastIdx) out.push({ kind: 'text', value: src.slice(lastIdx, m.index) });
-    if (m[1] !== undefined) out.push({ kind: 'block', value: m[1] });
-    else if (m[2] !== undefined) out.push({ kind: 'inline', value: m[2] });
-    lastIdx = re.lastIndex;
-  }
-  if (lastIdx < src.length) out.push({ kind: 'text', value: src.slice(lastIdx) });
-  return out;
-}
-
-function renderLatexSafe(src: string, displayMode: boolean): { html: string } | { error: string } {
-  try {
-    const html = katex.renderToString(src, { displayMode, throwOnError: true, strict: 'ignore' });
-    return { html };
-  } catch (e) { return { error: (e as Error).message }; }
-}
-
 /* RichText was the prior user-message renderer. Removed in the GUI
  * overhaul; ResultRender handles assistant rendering and there is no
- * user-message surface now. The shared splitForLatex / renderLatexSafe
- * helpers above are still used by the Preview card. */
+ * user-message surface now. */
 
 /* ─── handle exposed to App.tsx for the right-click menu ─────────── */
 
@@ -749,8 +722,6 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
     );
   }
 
-  const previewSegments = splitForLatex(verifiedInput);
-
   return (
     <aside className="noteometry-mm-pane" aria-label="Math / Message">
       <header className="noteometry-mm-header">
@@ -761,101 +732,102 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
         </div>
       </header>
 
-      <div className="noteometry-mm-modetabs" role="tablist" aria-label="Pipeline">
-        <button type="button" role="tab" aria-selected={mode === 'math'} className={`noteometry-mm-modetab${mode === 'math' ? ' is-active' : ''}`} onClick={() => setMode('math')}>Math</button>
-        <button type="button" role="tab" aria-selected={mode === 'general'} className={`noteometry-mm-modetab${mode === 'general' ? ' is-active' : ''}`} onClick={() => setMode('general')}>General</button>
-        <button type="button" role="tab" aria-selected={mode === 'voice'} className={`noteometry-mm-modetab${mode === 'voice' ? ' is-active' : ''}`} onClick={() => setMode('voice')}>Voice</button>
-      </div>
+      <div className="noteometry-mm-scroll">
+        <div className="noteometry-mm-modetabs" role="tablist" aria-label="Pipeline">
+          <button type="button" role="tab" aria-selected={mode === 'math'} className={`noteometry-mm-modetab${mode === 'math' ? ' is-active' : ''}`} onClick={() => setMode('math')}>Math</button>
+          <button type="button" role="tab" aria-selected={mode === 'general'} className={`noteometry-mm-modetab${mode === 'general' ? ' is-active' : ''}`} onClick={() => setMode('general')}>General</button>
+          <button type="button" role="tab" aria-selected={mode === 'voice'} className={`noteometry-mm-modetab${mode === 'voice' ? ' is-active' : ''}`} onClick={() => setMode('voice')}>Voice</button>
+        </div>
 
-      {showSettings && (
-        <section className="noteometry-mm-settings" aria-label="AI Settings">
-          <header className="noteometry-mm-settings-head">
-            <div>
-              <div className="noteometry-mm-settings-title">AI Settings</div>
-              <div className="noteometry-mm-settings-sub">One active provider drives Read Math, Solve, and Ask.</div>
-            </div>
-            <button
-              type="button"
-              className="noteometry-mm-secondary noteometry-mm-secondary-quiet"
-              onClick={() => setShowSettings(false)}
-              aria-label="Close settings"
-            >
-              Close
-            </button>
-          </header>
-          <ProviderJobEditor
-            jobLabel="Active model"
-            jobDescription="Used for every AI call (vision + text)."
-            config={ai}
-            onChange={(c) => setAi(c)}
+        {showSettings && (
+          <section className="noteometry-mm-settings" aria-label="AI Settings">
+            <header className="noteometry-mm-settings-head">
+              <div>
+                <div className="noteometry-mm-settings-title">AI Settings</div>
+                <div className="noteometry-mm-settings-sub">One active provider drives Read Math, Solve, and Ask.</div>
+              </div>
+              <button
+                type="button"
+                className="noteometry-mm-secondary noteometry-mm-secondary-quiet"
+                onClick={() => setShowSettings(false)}
+                aria-label="Close settings"
+              >
+                Close
+              </button>
+            </header>
+            <ProviderJobEditor
+              jobLabel="Active model"
+              jobDescription="Used for every AI call (vision + text)."
+              config={ai}
+              onChange={(c) => setAi(c)}
+            />
+            <p className="noteometry-mm-settings-note">
+              Hosted Noteometry should run one OpenAI key on Vercel. Browser
+              keys are local-dev only; production calls must go through server
+              functions so every device can use the same model access safely.
+            </p>
+            <footer className="noteometry-mm-settings-footer">
+              <button
+                type="button"
+                className={`noteometry-mm-secondary noteometry-mm-secondary-primary${recentlySaved ? ' is-confirmed' : ''}`}
+                onClick={onSaveSettings}
+                title="Save AI settings on this device"
+              >
+                {recentlySaved ? 'Saved ✓' : 'Save'}
+              </button>
+            </footer>
+          </section>
+        )}
+
+        <StatusChips
+          mode={mode}
+          diag={diag}
+          captured={!!captured}
+          verifiedReady={verifiedInput.trim().length > 0}
+          modelName={ai.model}
+        />
+
+        {mode === 'math' ? (
+          <MathPanel
+            captured={captured}
+            reading={reading}
+            solving={solving}
+            verifiedInput={verifiedInput}
+            mathLog={mathLog}
+            diag={diag}
+            onReadMath={() => void readMath()}
+            onSolve={() => void solveVerifiedMath()}
+            onClearInput={() => setVerifiedInput('')}
+            onInputChange={setVerifiedInput}
+            onCopyForWord={onCopyForWord}
           />
-          <p className="noteometry-mm-settings-note">
-            Hosted Noteometry should run one OpenAI key on Vercel. Browser
-            keys are local-dev only; production calls must go through server
-            functions so every device can use the same model access safely.
-          </p>
-          <footer className="noteometry-mm-settings-footer">
-            <button
-              type="button"
-              className={`noteometry-mm-secondary noteometry-mm-secondary-primary${recentlySaved ? ' is-confirmed' : ''}`}
-              onClick={onSaveSettings}
-              title="Save AI settings on this device"
-            >
-              {recentlySaved ? 'Saved ✓' : 'Save'}
-            </button>
-          </footer>
-        </section>
-      )}
-
-      <StatusChips
-        mode={mode}
-        diag={diag}
-        captured={!!captured}
-        verifiedReady={verifiedInput.trim().length > 0}
-        modelName={ai.model}
-      />
-
-      {mode === 'math' ? (
-        <MathPanel
-          captured={captured}
-          reading={reading}
-          solving={solving}
-          verifiedInput={verifiedInput}
-          previewSegments={previewSegments}
-          mathLog={mathLog}
-          diag={diag}
-          onReadMath={() => void readMath()}
-          onSolve={() => void solveVerifiedMath()}
-          onClearInput={() => setVerifiedInput('')}
-          onInputChange={setVerifiedInput}
-          onCopyForWord={onCopyForWord}
-        />
-      ) : mode === 'general' ? (
-        <GeneralPanel
-          captured={captured}
-          generalDraft={generalDraft}
-          generalLog={generalLog}
-          generalSending={generalSending}
-          diag={diag}
-          onCapture={() => void captureGeneral()}
-          onClearCapture={() => setCaptured(null)}
-          onClearDraft={() => setGeneralDraft('')}
-          onDraftChange={setGeneralDraft}
-          onSend={() => void sendGeneral()}
-          onCopyForWord={onCopyForWord}
-          promptRef={generalPromptRef}
-        />
-      ) : (
-        <VoicePanel
-          recording={recording}
-          transcribing={transcribing}
-          voiceLog={voiceLog}
-          onStart={startRecording}
-          onStop={stopRecording}
-          onClear={() => setVoiceLog([])}
-          onCopyForWord={onCopyForWord}
-        />
-      )}
+        ) : mode === 'general' ? (
+          <GeneralPanel
+            captured={captured}
+            generalDraft={generalDraft}
+            generalLog={generalLog}
+            generalSending={generalSending}
+            diag={diag}
+            onCapture={() => void captureGeneral()}
+            onClearCapture={() => setCaptured(null)}
+            onClearDraft={() => setGeneralDraft('')}
+            onDraftChange={setGeneralDraft}
+            onSend={() => void sendGeneral()}
+            onCopyForWord={onCopyForWord}
+            promptRef={generalPromptRef}
+          />
+        ) : (
+          <VoicePanel
+            recording={recording}
+            transcribing={transcribing}
+            voiceLog={voiceLog}
+            onStart={startRecording}
+            onStop={stopRecording}
+            onClear={() => setVoiceLog([])}
+            onCopyForWord={onCopyForWord}
+          />
+        )}
+      </div>
 
       {/* Left-edge horizontal resize handle for the pane. */}
       <div
@@ -1091,13 +1063,11 @@ function DetailsDisclosure({ diag, history }: {
 /* ─── MATH panel (Preview + Input + Solve + Chat) ─────────────── */
 
 const ACCENT_CARD_CAPTURE = '#5aa0e8';   // blue — input from canvas
-const ACCENT_CARD_PREVIEW = '#c08fff';   // purple — model's read
 const ACCENT_CARD_VERIFIED = '#f3ba5b';  // amber — human verification
 const ACCENT_CARD_RESULT = '#6ed18c';    // green — final answer
 const ACCENT_CARD_QUESTION = '#8b95a5';  // slate — user prompt
 
 const ACTION_ACCENT_READ = '#5aa0e8';
-const ACTION_ACCENT_SOLVE = '#6ed18c';
 const ACTION_ACCENT_WORD = '#a78bfa';
 const ACTION_ACCENT_CAPTURE = '#5aa0e8';
 const ACTION_ACCENT_ASK = '#6ed18c';
@@ -1108,7 +1078,6 @@ function MathPanel(props: {
   reading: boolean;
   solving: boolean;
   verifiedInput: string;
-  previewSegments: ReturnType<typeof splitForLatex>;
   mathLog: LogEntry[];
   diag: Diag | null;
   onReadMath: () => void;
@@ -1118,17 +1087,16 @@ function MathPanel(props: {
   onCopyForWord: (text: string) => void;
 }) {
   const {
-    captured, reading, solving, verifiedInput, previewSegments, mathLog, diag,
+    captured, reading, solving, verifiedInput, mathLog, diag,
     onReadMath, onSolve, onClearInput, onInputChange, onCopyForWord,
   } = props;
 
   const canSolve = verifiedInput.trim().length > 0 && !solving;
+  const verifiedPreviewHtml = useMemo(() => renderAsMathML(verifiedInput), [verifiedInput]);
   const latestResult = useMemo(
     () => [...mathLog].reverse().find((e) => e.role === 'assistant') ?? null,
     [mathLog],
   );
-  const hasResult = !!latestResult;
-  const previewHasContent = previewSegments.some((s) => s.value.trim().length > 0);
 
   return (
     <>
@@ -1141,17 +1109,10 @@ function MathPanel(props: {
           accent={ACTION_ACCENT_READ}
         />
         <ActionTile
-          label={solving ? 'Solving…' : 'Solve'}
-          icon={<SolveIcon />}
-          onClick={onSolve}
-          disabled={!canSolve}
-          accent={ACTION_ACCENT_SOLVE}
-        />
-        <ActionTile
           label="Copy for Word"
           icon={<WordIcon />}
-          onClick={() => latestResult && onCopyForWord(latestResult.text)}
-          disabled={!hasResult}
+          onClick={() => onCopyForWord(verifiedInput)}
+          disabled={!verifiedInput.trim()}
           accent={ACTION_ACCENT_WORD}
         />
         <ActionTile
@@ -1175,28 +1136,30 @@ function MathPanel(props: {
         )}
       </Card>
 
-      <Card title="Preview" accent={ACCENT_CARD_PREVIEW}>
-        {previewHasContent ? (
-          <div className="noteometry-mm-preview-render">
-            {previewSegments.map((seg, i) => {
-              if (seg.kind === 'text') return <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{seg.value}</span>;
-              const r = renderLatexSafe(seg.value, seg.kind === 'block');
-              if ('error' in r) {
-                return (
-                  <span key={i} className="noteometry-mm-preview-source" title={r.error}>
-                    {seg.kind === 'block' ? `$$${seg.value}$$` : `$${seg.value}$`}
-                  </span>
-                );
-              }
-              return <span key={i} dangerouslySetInnerHTML={{ __html: r.html }} />;
-            })}
-          </div>
-        ) : (
-          <CardPlaceholder label="—" />
+      <Card
+        title="Verified Input"
+        accent={ACCENT_CARD_VERIFIED}
+        action={(
+          <>
+            <button
+              type="button"
+              className="noteometry-mm-card-action-btn"
+              onClick={onSolve}
+              disabled={!canSolve}
+            >
+              {solving ? 'Solving…' : 'Solve'}
+            </button>
+            <button
+              type="button"
+              className="noteometry-mm-card-action-btn"
+              onClick={() => onCopyForWord(verifiedInput)}
+              disabled={!verifiedInput.trim()}
+            >
+              Copy MathML
+            </button>
+          </>
         )}
-      </Card>
-
-      <Card title="Verified Input" accent={ACCENT_CARD_VERIFIED}>
+      >
         {/* The wrapper is intentionally a <section> with the legacy
             .noteometry-mm-preview-panel class so the e2e selector
             `section.noteometry-mm-preview-panel textarea` resolves. */}
@@ -1219,6 +1182,13 @@ function MathPanel(props: {
             >
               ×
             </button>
+          </div>
+          <div className="noteometry-mm-input-preview" aria-label="Verified input MathML preview">
+            {verifiedInput.trim() ? (
+              <div dangerouslySetInnerHTML={{ __html: verifiedPreviewHtml }} />
+            ) : (
+              <span className="noteometry-mm-preview-empty">Text and $LaTeX$ preview as MathML here.</span>
+            )}
           </div>
         </section>
       </Card>

@@ -10,9 +10,32 @@
  */
 import katex from 'katex';
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderText(text: string): string {
+  return escapeHtml(text).replace(/\n/g, '<br>');
+}
+
+function sanitizeMathML(math: string): string {
+  return math
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*[^\s>]+/gi, '')
+    .replace(/\s+href\s*=\s*(['"]?)javascript:[\s\S]*?\1/gi, '');
+}
+
 /** Render mixed prose+math text to HTML with MathML islands.
- *  $...$ becomes inline MathML, $$...$$ becomes display MathML wrapped
- *  in a centered block. Newlines become <br>. */
+ *  $...$ and \(...\) become inline MathML; $$...$$ and \[...\] become
+ *  display MathML. Raw <math>...</math> is preserved for pasted MathML.
+ *  Prose is escaped before newlines become <br>. */
 export function renderAsMathML(text: string): string {
   if (!text) return '';
   const toMath = (tex: string, display: boolean): string => {
@@ -30,15 +53,25 @@ export function renderAsMathML(text: string): string {
       }
       return html;
     } catch {
-      return tex;
+      return renderText(tex);
     }
   };
 
-  let result = text;
-  result = result.replace(/\$\$([\s\S]*?)\$\$/g, (_m, tex) => toMath(tex, true));
-  result = result.replace(/\$([^$]+?)\$/g, (_m, tex) => toMath(tex, false));
-  result = result.replace(/\n/g, '<br>');
-  return result;
+  const out: string[] = [];
+  const tokenRe = /(<math[\s\S]*?<\/math>)|\\\[([\s\S]*?)\\\]|\\\(([\s\S]*?)\\\)|\$\$([\s\S]*?)\$\$|\$([^$\n]+?)\$/gi;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  while ((match = tokenRe.exec(text))) {
+    if (match.index > lastIdx) out.push(renderText(text.slice(lastIdx, match.index)));
+    if (match[1] !== undefined) out.push(sanitizeMathML(match[1]));
+    else if (match[2] !== undefined) out.push(toMath(match[2], true));
+    else if (match[3] !== undefined) out.push(toMath(match[3], false));
+    else if (match[4] !== undefined) out.push(toMath(match[4], true));
+    else if (match[5] !== undefined) out.push(toMath(match[5], false));
+    lastIdx = tokenRe.lastIndex;
+  }
+  if (lastIdx < text.length) out.push(renderText(text.slice(lastIdx)));
+  return out.join('');
 }
 
 /** Same conversion as renderAsMathML but wraps each non-empty line in a

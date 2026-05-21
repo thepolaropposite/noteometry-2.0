@@ -15,6 +15,10 @@ import { addDropIn, addImageDropIn } from './dropins/dropInStore';
 import type { DropInType } from './dropins/types';
 
 const CANVAS_ITEMS_PREFIX = 'noteometry-os:canvas-items:v1:';
+const CANVAS_WORLD_MIN_WIDTH = 6400;
+const CANVAS_WORLD_MIN_HEIGHT = 4800;
+const CANVAS_WORLD_GROW_BY = 2400;
+const CANVAS_WORLD_EDGE_PAD = 900;
 
 type ToolMode = 'draw' | 'eraser' | 'select';
 
@@ -215,6 +219,7 @@ export default function App() {
   const toastTimer = useRef<number | null>(null);
   const paneRef = useRef<MathMessagePaneHandle>(null);
   const canvasShellRef = useRef<HTMLDivElement | null>(null);
+  const canvasWorldRef = useRef<HTMLDivElement | null>(null);
   const lastCanvasPointRef = useRef<{ x: number; y: number } | null>(null);
   const [mathPaletteOpen, setMathPaletteOpen] = useState<boolean>(false);
   const [paletteStamp, setPaletteStamp] = useState<PaletteStamp | null>(null);
@@ -226,6 +231,10 @@ export default function App() {
   const [selectedIdsByPage, setSelectedIdsByPage] = useState<Record<string, string[]>>({});
   const [selectionRectsByPage, setSelectionRectsByPage] = useState<Record<string, Rect | null>>({});
   const [isCapturingCanvas, setIsCapturingCanvas] = useState(false);
+  const [canvasWorldBaseSize, setCanvasWorldBaseSize] = useState({
+    width: CANVAS_WORLD_MIN_WIDTH,
+    height: CANVAS_WORLD_MIN_HEIGHT,
+  });
   const canvasItems = itemsByPage[activePageId] ?? readCanvasItems(activePageId);
   const selectedItemIds = useMemo(
     () => new Set(selectedIdsByPage[activePageId] ?? []),
@@ -240,6 +249,19 @@ export default function App() {
   const selectedBounds = useMemo(() => boundsForItems(selectedItems), [selectedItems]);
   const activeSelectionRect = selectionRectsByPage[activePageId] ?? null;
   const visibleSelectionRect = activeSelectionRect ?? selectedBounds;
+  const canvasWorldSize = useMemo(() => {
+    const bounds = boundsForItems(canvasItems);
+    return {
+      width: Math.max(
+        canvasWorldBaseSize.width,
+        bounds ? bounds.x + bounds.w + CANVAS_WORLD_EDGE_PAD : CANVAS_WORLD_MIN_WIDTH
+      ),
+      height: Math.max(
+        canvasWorldBaseSize.height,
+        bounds ? bounds.y + bounds.h + CANVAS_WORLD_EDGE_PAD : CANVAS_WORLD_MIN_HEIGHT
+      ),
+    };
+  }, [canvasItems, canvasWorldBaseSize]);
 
   const showToast = useCallback((msg: string, ms = 2400) => {
     setToast(msg);
@@ -275,16 +297,16 @@ export default function App() {
   }, []);
 
   const shellPointFromClient = useCallback((clientX: number, clientY: number) => {
-    const shell = canvasShellRef.current;
-    if (!shell) return null;
-    const rect = shell.getBoundingClientRect();
+    const world = canvasWorldRef.current;
+    if (!world) return null;
+    const rect = world.getBoundingClientRect();
     return { x: clientX - rect.left, y: clientY - rect.top };
   }, []);
 
   const spawnDropIn = useCallback((type: Exclude<DropInType, 'math' | 'chat'>, point: { x: number; y: number } | null) => {
     const shell = canvasShellRef.current;
     const target = point ?? (shell
-      ? { x: shell.clientWidth / 2, y: shell.clientHeight / 2 }
+      ? { x: shell.scrollLeft + shell.clientWidth / 2, y: shell.scrollTop + shell.clientHeight / 2 }
       : { x: 260, y: 180 });
     addDropIn(activePageId, type, target.x, target.y);
     const label = type === 'pdf' ? 'PDF' : `${type[0].toUpperCase()}${type.slice(1)}`;
@@ -298,7 +320,7 @@ export default function App() {
       if (typeof result !== 'string') return;
       const shell = canvasShellRef.current;
       const target = point ?? (shell
-        ? { x: shell.clientWidth / 2, y: shell.clientHeight / 2 }
+        ? { x: shell.scrollLeft + shell.clientWidth / 2, y: shell.scrollTop + shell.clientHeight / 2 }
         : { x: 260, y: 180 });
       addImageDropIn(activePageId, result, file.name || 'Pasted image', target.x, target.y);
       showToast('Image pasted onto the canvas.');
@@ -337,6 +359,20 @@ export default function App() {
     showToast(`Stamped "${paletteStamp.symbol}" (${paletteStamp.size}).`);
   }, [paletteStamp, setActiveCanvasItems, shellPointFromClient, showToast]);
 
+  const growCanvasWorldIfNeeded = useCallback(() => {
+    const shell = canvasShellRef.current;
+    if (!shell) return;
+    setCanvasWorldBaseSize((prev) => {
+      const needsWidth = shell.scrollLeft + shell.clientWidth > prev.width - CANVAS_WORLD_EDGE_PAD;
+      const needsHeight = shell.scrollTop + shell.clientHeight > prev.height - CANVAS_WORLD_EDGE_PAD;
+      if (!needsWidth && !needsHeight) return prev;
+      return {
+        width: needsWidth ? prev.width + CANVAS_WORLD_GROW_BY : prev.width,
+        height: needsHeight ? prev.height + CANVAS_WORLD_GROW_BY : prev.height,
+      };
+    });
+  }, []);
+
   const captureMixedSelection = useCallback(async (): Promise<MixedCapture | null> => {
     if (!canvasShellRef.current) return null;
     const shell = canvasShellRef.current;
@@ -345,12 +381,16 @@ export default function App() {
     if (!bounds) return null;
     const targetItems = canvasItems.filter((item) => rectsIntersect(boundsForItem(item), bounds));
     if (!activeSelectionRect && targetItems.length === 0) return null;
-    const shellRect = shell.getBoundingClientRect();
     const pad = activeSelectionRect ? 0 : 16;
-    const cropX = Math.max(0, bounds.x - pad);
-    const cropY = Math.max(0, bounds.y - pad);
-    const cropRight = Math.min(shellRect.width, bounds.x + bounds.w + pad);
-    const cropBottom = Math.min(shellRect.height, bounds.y + bounds.h + pad);
+    const visibleLeft = shell.scrollLeft;
+    const visibleTop = shell.scrollTop;
+    const visibleRight = visibleLeft + shell.clientWidth;
+    const visibleBottom = visibleTop + shell.clientHeight;
+    const cropX = Math.max(visibleLeft, bounds.x - pad);
+    const cropY = Math.max(visibleTop, bounds.y - pad);
+    const cropRight = Math.min(visibleRight, bounds.x + bounds.w + pad);
+    const cropBottom = Math.min(visibleBottom, bounds.y + bounds.h + pad);
+    if (cropRight <= cropX || cropBottom <= cropY) return null;
     const crop = {
       x: cropX,
       y: cropY,
@@ -378,8 +418,10 @@ export default function App() {
         img.onerror = reject;
         img.src = fullDataUrl;
       });
-      const scaleX = img.width / shellRect.width;
-      const scaleY = img.height / shellRect.height;
+      const scaleX = img.width / shell.clientWidth;
+      const scaleY = img.height / shell.clientHeight;
+      const sourceX = crop.x - visibleLeft;
+      const sourceY = crop.y - visibleTop;
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(crop.width * scaleX));
       canvas.height = Math.max(1, Math.round(crop.height * scaleY));
@@ -387,8 +429,8 @@ export default function App() {
       if (!ctx) throw new Error('Could not create capture canvas.');
       ctx.drawImage(
         img,
-        crop.x * scaleX,
-        crop.y * scaleY,
+        sourceX * scaleX,
+        sourceY * scaleY,
         crop.width * scaleX,
         crop.height * scaleY,
         0,
@@ -499,39 +541,46 @@ export default function App() {
         ref={canvasShellRef}
         className="noteometry-canvas-shell"
         onContextMenu={handleCanvasContextMenu}
+        onScroll={growCanvasWorldIfNeeded}
         onPointerMove={(e) => {
           lastCanvasPointRef.current = shellPointFromClient(e.clientX, e.clientY);
         }}
       >
-        <InkCanvas
-          items={canvasItems}
-          onItemsChange={setActiveCanvasItems}
-          tool={currentTool}
-          selectedItemIds={selectedItemIds}
-          selectedBounds={visibleSelectionRect}
-          onSelectionChange={setActiveSelectedItemIds}
-          onSelectionRectChange={setActiveSelectionRect}
-          onPointerPosition={(point) => { lastCanvasPointRef.current = point; }}
-          hideSelection={isCapturingCanvas}
-        />
-        <DropInHost pageId={activePageId} />
-        {paletteStamp && (
-          <div
-            className="noteometry-stamp-overlay"
-            role="presentation"
-            onPointerDown={(e) => {
-              if (e.button !== 0) return;
-              e.preventDefault();
-              dropPaletteStamp(e.clientX, e.clientY);
-            }}
-            title={`Click to stamp "${paletteStamp.symbol}" (${paletteStamp.size}). Esc cancels.`}
-          >
-            <div className="noteometry-stamp-cue">
-              <span className="noteometry-stamp-cue-glyph">{paletteStamp.symbol}</span>
-              <span>Click canvas to place</span>
+        <div
+          ref={canvasWorldRef}
+          className="noteometry-canvas-world"
+          style={{ width: canvasWorldSize.width, height: canvasWorldSize.height }}
+        >
+          <InkCanvas
+            items={canvasItems}
+            onItemsChange={setActiveCanvasItems}
+            tool={currentTool}
+            selectedItemIds={selectedItemIds}
+            selectedBounds={visibleSelectionRect}
+            onSelectionChange={setActiveSelectedItemIds}
+            onSelectionRectChange={setActiveSelectionRect}
+            onPointerPosition={(point) => { lastCanvasPointRef.current = point; }}
+            hideSelection={isCapturingCanvas}
+          />
+          <DropInHost pageId={activePageId} />
+          {paletteStamp && (
+            <div
+              className="noteometry-stamp-overlay"
+              role="presentation"
+              onPointerDown={(e) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                dropPaletteStamp(e.clientX, e.clientY);
+              }}
+              title={`Click to stamp "${paletteStamp.symbol}" (${paletteStamp.size}). Esc cancels.`}
+            >
+              <div className="noteometry-stamp-cue">
+                <span className="noteometry-stamp-cue-glyph">{paletteStamp.symbol}</span>
+                <span>Click canvas to place</span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <PageRail nav={nav} onCollapsedChange={(collapsed) => setPageRailOpen(!collapsed)} />
@@ -607,6 +656,7 @@ function InkCanvas({
 
   const onPointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (e.button !== 0) return;
+    if (e.pointerType === 'touch') return;
     const point = pointFromEvent(e);
     onPointerPosition(point);
     e.currentTarget.setPointerCapture(e.pointerId);
