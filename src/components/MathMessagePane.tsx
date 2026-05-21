@@ -282,12 +282,13 @@ export interface MathMessagePaneHandle {
 
 export interface MathMessagePaneProps {
   editor: Editor | null;
+  captureMixedSelection?: () => Promise<CapturedImage | null>;
   onPaneOpenChange?: (open: boolean) => void;
   onToast?: (msg: string) => void;
 }
 
 const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(function MathMessagePane(
-  { editor, onPaneOpenChange, onToast },
+  { editor, captureMixedSelection, onPaneOpenChange, onToast },
   ref
 ) {
   const initial = useMemo(loadPersisted, []);
@@ -379,6 +380,16 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
       onToast?.('Nothing to read yet. Add ink or select shapes first.');
       return null;
     }
+    if (captureMixedSelection) {
+      const mixed = await captureMixedSelection();
+      if (mixed) {
+        setCaptured(mixed);
+        onToast?.(usedFallback
+          ? `No lasso selection; captured page region with ${ids.length} shape${ids.length === 1 ? '' : 's'}.`
+          : `Captured screenshot region with ${ids.length} shape${ids.length === 1 ? '' : 's'}.`);
+        return mixed;
+      }
+    }
     try {
       const result = await editor.toImageDataUrl(ids, {
         format: 'png', scale: 2, background: true, padding: 12,
@@ -400,7 +411,7 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
       onToast?.(`Capture failed: ${(e as Error).message}`);
       return null;
     }
-  }, [editor, onToast]);
+  }, [editor, captureMixedSelection, onToast]);
 
   /* ─── HTTP wrapper that fills the diagnostics strip ──────────── */
 

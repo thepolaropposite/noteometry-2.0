@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Tldraw, Editor, createShapeId, toRichText } from 'tldraw';
+import { toPng } from 'html-to-image';
 import 'tldraw/tldraw.css';
 import ContextMenu, { type ContextMenuItem } from './components/ContextMenu';
 import MathMessagePane, { type MathMessagePaneHandle } from './components/MathMessagePane';
@@ -20,6 +21,21 @@ const ACCENT_SELECT = '#c08fff';
 const ACCENT_DROPINS = '#6ed18c';
 const ACCENT_MATH = '#f3ba5b';
 const ACCENT_EXPORT = '#8b95a5';
+const CANVAS_BACKUP_PREFIX = 'noteometry-os:canvas-backup:v1:';
+
+interface CanvasBackup {
+  shapeCount: number;
+  snapshot: ReturnType<Editor['getSnapshot']>;
+  savedAt: number;
+}
+
+interface MixedCapture {
+  dataUrl: string;
+  width: number;
+  height: number;
+  capturedAt: number;
+  shapeCount: number;
+}
 
 class OSBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
@@ -105,6 +121,63 @@ export default function App() {
     e.user.updateUserPreferences({ colorScheme: 'dark' });
     setCurrentTool(e.getCurrentToolId());
   }, []);
+
+  useEffect(() => {
+    if (!editor) return;
+    const key = `${CANVAS_BACKUP_PREFIX}${nav.activePage.id}`;
+    const readBackup = (): CanvasBackup | null => {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) as CanvasBackup : null;
+      } catch {
+        return null;
+      }
+    };
+    const currentShapeCount = () => editor.getCurrentPageShapeIds().size;
+    const saveBackup = () => {
+      const shapeCount = currentShapeCount();
+      const previous = readBackup();
+      if (shapeCount === 0 && previous && previous.shapeCount > 0) return;
+      try {
+        const backup: CanvasBackup = {
+          shapeCount,
+          snapshot: editor.getSnapshot(),
+          savedAt: Date.now(),
+        };
+        localStorage.setItem(key, JSON.stringify(backup));
+      } catch (err) {
+        console.warn('[Noteometry] canvas backup failed', err);
+      }
+    };
+    const restoreIfBlank = () => {
+      const backup = readBackup();
+      if (!backup || backup.shapeCount === 0) return;
+      if (currentShapeCount() > 0) return;
+      try {
+        editor.loadSnapshot(backup.snapshot);
+        showToast('Restored canvas from Noteometry backup.');
+      } catch (err) {
+        console.warn('[Noteometry] canvas restore failed', err);
+      }
+    };
+
+    const restoreTimers = [
+      window.setTimeout(restoreIfBlank, 1200),
+      window.setTimeout(restoreIfBlank, 4200),
+      window.setTimeout(restoreIfBlank, 7000),
+    ];
+    let saveTimer: number | null = null;
+    const unsubscribe = editor.store.listen(() => {
+      if (saveTimer !== null) window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(saveBackup, 350);
+    });
+    saveBackup();
+    return () => {
+      restoreTimers.forEach((t) => window.clearTimeout(t));
+      if (saveTimer !== null) window.clearTimeout(saveTimer);
+      unsubscribe();
+    };
+  }, [editor, nav.activePage.id, showToast]);
 
   const setCanvasTool = useCallback((id: 'draw' | 'eraser' | 'select') => {
     if (!editor) return;
@@ -219,6 +292,76 @@ export default function App() {
       showToast(`Export failed: ${(err as Error).message}`);
     }
   }, [editor, nav.activePage.title, showToast]);
+
+  const captureMixedSelection = useCallback(async (): Promise<MixedCapture | null> => {
+    if (!editor || !canvasShellRef.current) return null;
+    const shell = canvasShellRef.current;
+    let ids = editor.getSelectedShapeIds();
+    if (ids.length === 0) ids = Array.from(editor.getCurrentPageShapeIds());
+    if (ids.length === 0) return null;
+    const bounds = editor.getSelectionScreenBounds()
+      ?? editor.getSelectionPageBounds()
+      ?? null;
+    if (!bounds) return null;
+    const shellRect = shell.getBoundingClientRect();
+    const pad = 16;
+    const crop = {
+      x: Math.max(0, bounds.x - shellRect.left - pad),
+      y: Math.max(0, bounds.y - shellRect.top - pad),
+      width: Math.min(shellRect.width, bounds.w + pad * 2),
+      height: Math.min(shellRect.height, bounds.h + pad * 2),
+    };
+    const selected = editor.getSelectedShapeIds();
+    editor.selectNone();
+    try {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const fullDataUrl = await toPng(shell, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: '#6f7479',
+        filter: (node) => {
+          if (!(node instanceof HTMLElement)) return true;
+          return !node.classList.contains('noteometry-stamp-overlay');
+        },
+      });
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = fullDataUrl;
+      });
+      const scaleX = img.width / shellRect.width;
+      const scaleY = img.height / shellRect.height;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(crop.width * scaleX));
+      canvas.height = Math.max(1, Math.round(crop.height * scaleY));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Could not create capture canvas.');
+      ctx.drawImage(
+        img,
+        crop.x * scaleX,
+        crop.y * scaleY,
+        crop.width * scaleX,
+        crop.height * scaleY,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+      return {
+        dataUrl: canvas.toDataURL('image/png'),
+        width: canvas.width,
+        height: canvas.height,
+        capturedAt: Date.now(),
+        shapeCount: ids.length,
+      };
+    } catch (err) {
+      console.warn('[Noteometry] mixed capture failed; falling back to tldraw export', err);
+      return null;
+    } finally {
+      if (selected.length > 0) editor.setSelectedShapes(selected);
+    }
+  }, [editor]);
 
   /** Build the FLAT right-click context menu. Per Dan's ADHD rule: every
    *  command is visible at once — no submenus, no flyouts, no hover-reveal.
@@ -344,6 +487,7 @@ export default function App() {
       <MathMessagePane
         ref={paneRef}
         editor={editor}
+        captureMixedSelection={captureMixedSelection}
         onPaneOpenChange={setMmPaneOpen}
         onToast={showToast}
       />
