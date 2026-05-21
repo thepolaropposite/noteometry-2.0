@@ -20,7 +20,7 @@ It is **not**:
 - a chat client with a canvas attached
 - a generic AI playground
 
-The product is a **commander's workstation** for working through STEM problems by hand on a real engineering grid and getting deterministic, structured math help when needed. Every Law below exists to keep the product from drifting back into "another AI chat app with a whiteboard slapped on."
+The product is a **five-year EE lifeline**: Nebo-simple ink, OneNote-strength workspace tools, movable Drop-Ins™, and deterministic AI help over pixels. Every Law below exists to keep the product from drifting back into "another AI chat app with a whiteboard slapped on."
 
 ---
 
@@ -32,7 +32,7 @@ Noteometry OS is web-first and standalone.
 - **Do not import any Obsidian APIs** (`obsidian`, `requestUrl`, `Notice`, `Plugin`, `WorkspaceLeaf`, etc.).
 - **Do not create Obsidian compatibility shims**, even "just for now."
 - Old `noteometry-obsidian` is **read-only reference material**. We port *concepts* and *math*, not infrastructure.
-- Network calls go through standard `fetch`, optionally routed through the Vite dev proxy (`/lmstudio` → LM Studio).
+- Hosted network calls go through Vercel server functions backed by one OpenAI API key. Local provider/proxy code may exist for development, but the product path is OpenAI remote inference, not per-device provider juggling.
 - Persistence is browser-native (`localStorage` for app state; tldraw IndexedDB for canvas content per page).
 
 ---
@@ -46,7 +46,7 @@ Nothing draws directly on the raw canvas except:
 
 Everything else is a **Drop-In™** (Law 3). The canvas does not know what a table is, what a chat is, what a PDF page is, what an AI answer is — those are anchored cards living *on top of* the canvas substrate.
 
-**Rationale:** the rasterizer in `src/features/lasso/rasterize.ts` (v1.10) was named "the dumb pipe" for a reason. The canvas is pixels; the *model* does interpretation. The same discipline applies inward: keeping the canvas dumb means tldraw never needs to know what a Circuit Sniper card is, and a future Drop-In™ never needs to know what tldraw is.
+**Rationale:** the rasterizer in `src/features/lasso/rasterize.ts` (v1.10) was named "the dumb pipe" for a reason. The canvas is pixels; the *model* does interpretation. The same discipline applies inward: keeping the canvas dumb means tldraw never needs to know what a movable Drop-In™ card is, and a future Drop-In™ never needs to know what tldraw is.
 
 ---
 
@@ -72,10 +72,11 @@ The current Drop-In™ catalog (planned):
 | **PDF** | PDF page or range. |
 | **Math** | LaTeX/MathML mini-card (verified math snippet). |
 | **Chat** | Localized canvas-anchored conversation (v1.10 ChatDropin reference, but secondary to the AI Pane). |
-| **Circuit Sniper** | Circuit analysis mini-app. |
 | **Graph** | Plot / function grapher. |
 | **Calculator** | Scratch calculator. |
 | **AI Result** | A pinned answer snapshot pulled from the AI Pane. |
+
+Removed/past-feature domains such as Circuit Sniper, multimeter, oscilloscope, and other instrument simulators may remain in repository history, but they are not part of the active Noteometry OS surface. The app focuses on ink, Office-like study tools, movable Drop-Ins™, pasted screenshots/images, and vision-first AI processing.
 
 Notes:
 
@@ -237,17 +238,18 @@ Rules:
 
 Workflow is **deterministic**. Model choice is **configurable**.
 
-Three independently-configured **jobs**:
+One hosted OpenAI backend drives the AI surface. The user may choose model names where helpful, but Noteometry OS should not feel like a multi-provider playground.
 
-| Job | Modality | Default | Purpose |
+| Job | Modality | Hosted default | Purpose |
 |---|---|---|---|
-| `mathRead` | Vision | LM Studio @ `/lmstudio/v1` · `google/gemma-4-26b-a4b` | Transcribe screenshot to JSON |
-| `mathSolve` | Text | LM Studio @ `/lmstudio/v1` · `google/gemma-4-26b-a4b` | Solve verified text under Math v12 |
-| `general` | Vision | LM Studio @ `/lmstudio/v1` · `google/gemma-4-26b-a4b` | Mixed-media vision Q&A |
+| `mathRead` | Vision | OpenAI vision-capable model via Vercel | Transcribe screenshot to JSON |
+| `mathSolve` | Text | OpenAI reasoning/text model via Vercel | Solve verified text under Math v12 |
+| `general` | Vision | OpenAI vision-capable model via Vercel | Mixed-media vision Q&A |
+| `voice` | Audio → Text | OpenAI transcription model via Vercel | Capture spoken notes, then optionally clean into study notes |
 
-Each job has its own `provider`, `baseUrl`, `apiKey`, `model`. Dan can mix providers — e.g. `qwen/qwen3-vl-30b` for Math Read while keeping `google/gemma-4-26b-a4b` for Math Solve.
+Local development may still expose provider/base-url fields until the server backend is complete, but the production UI must not ask the user to paste API keys into the browser.
 
-Provider catalog (`src/lib/aiProviders.ts`):
+Past/local provider catalog (`src/lib/aiProviders.ts`):
 
 | Provider | Status | Notes |
 |---|---|---|
@@ -261,8 +263,8 @@ Provider catalog (`src/lib/aiProviders.ts`):
 
 Non-negotiables:
 
-- **API keys live only in `localStorage` and as `Authorization: Bearer` headers.** Never logged. Never echoed. Never sent to telemetry.
-- **Unimplemented providers show a visible banner** ("Provider adapter not implemented yet. Use LM Studio or Custom OpenAI-compatible for now.") and `sendChat` throws the same string.
+- **API keys never appear in logs or diagnostics.** Hosted keys live in Vercel env vars only.
+- **Unimplemented or local-only providers must not be presented as the main product path.**
 - **Test Provider** prefers `/models` when supported, falls back to a tiny chat ping otherwise.
 - **Refresh Models** is only shown for providers with `modelsPath`.
 
@@ -319,8 +321,7 @@ Before any PR or hand-off, all of the following must be true. If any is false, t
 - [ ] Math pipeline Solve **always** wraps user content via `buildMathV12UserMessage`.
 - [ ] Solve button is `disabled` when `verifiedInput.trim() === ''`.
 - [ ] `console.log` (or any logger) never receives `apiKey` or any object containing `apiKey`.
-- [ ] Vite proxy `/lmstudio` → `http://127.0.0.1:1234` is present and unmodified.
-- [ ] LM Studio default base URL is `/lmstudio/v1` (not `http://localhost:1234`).
+- [ ] Hosted AI calls route through Vercel functions; browser-side keys are local-dev only.
 - [ ] AI Pane is rendered as persistent chrome — not gated behind a tool, not a Drop-In™.
 - [ ] `build` (`tsc -b && vite build`) passes.
 - [ ] Manually: lasso math → Read Math → preview populates; Solve → answer arrives; Copy for Word produces MathML.

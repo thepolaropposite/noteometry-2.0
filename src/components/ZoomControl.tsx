@@ -14,7 +14,6 @@ export default function ZoomControl({ editor }: Props) {
 
   useEffect(() => {
     if (!editor) return;
-    setZoom(editor.getZoomLevel());
     const unsubscribe = editor.store.listen(() => {
       const next = editor.getZoomLevel();
       setZoom((prev) => (Math.abs(prev - next) < 1e-4 ? prev : next));

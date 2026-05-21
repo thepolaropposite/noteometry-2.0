@@ -84,8 +84,6 @@ interface Props {
 export default function MathPalette({ open, armed, onArm, onClose }: Props) {
   const [size, setSize] = useState<MathPaletteSize>(armed?.size ?? 'large');
 
-  useEffect(() => { if (armed?.size) setSize(armed.size); }, [armed?.size]);
-
   // Esc dismisses the palette entirely; the canvas click handler also
   // disarms on its own when a stamp lands.
   useEffect(() => {

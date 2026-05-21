@@ -124,6 +124,24 @@ export function addDropIn(pageId: string, type: DropInType, x: number, y: number
   return dropIn.id;
 }
 
+export function addImageDropIn(pageId: string, src: string, alt: string, x: number, y: number): string {
+  const d = defaultsFor('image');
+  const dropIn: DropIn = {
+    id: freshId(),
+    type: 'image',
+    x: Math.max(8, snap(x - d.width / 2)),
+    y: Math.max(8, snap(y - 18)),
+    width: d.width,
+    height: d.height,
+    title: 'Pasted Image',
+    state: { src, alt },
+  };
+  const existing = state.byPage[pageId] ?? [];
+  state = { byPage: { ...state.byPage, [pageId]: [...existing, dropIn] } };
+  emit();
+  return dropIn.id;
+}
+
 export function deleteDropIn(pageId: string, id: string): void {
   const list = state.byPage[pageId];
   if (!list) return;

@@ -200,7 +200,8 @@ export function useNoteometryNav(): NoteometryNav {
         ? { ...s, pageIds: s.pageIds.filter((id) => id !== pageId) }
         : s
       );
-      const { [pageId]: _removed, ...remaining } = prev.pages;
+      const remaining = { ...prev.pages };
+      delete remaining[pageId];
       // If we just removed the active page, fall back to the first
       // remaining page in the same section, else any page anywhere, else
       // synthesize a fresh blank.

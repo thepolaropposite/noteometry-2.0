@@ -3,7 +3,7 @@
  *
  * Per Law 2 (Canvas Law) and Law 3 (Drop-In™ Law) of the Feature
  * Contract: the canvas itself only holds ink + Math Palette glyphs.
- * Text, Table, Math, Chat (and future Image, PDF, Circuit Sniper, …)
+ * Text, Table, Math, Chat, Image, and PDF
  * are Drop-Ins™ — self-contained mini-apps anchored to the canvas with
  * their own identity, title, position, size, state, UI, and lifecycle.
  *

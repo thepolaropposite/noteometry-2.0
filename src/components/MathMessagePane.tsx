@@ -17,9 +17,9 @@
  *     2. Capture General: vision call with generalVision.ts prompt + user text
  *     3. Answer joins the general chat log
  *
- * Each pipeline has its own provider + model (see ProviderJobEditor).
- * Defaults: all three jobs → LM Studio @ /lmstudio/v1 with
- * google/gemma-4-26b-a4b. The screenshot path is exclusively
+ * One active AI profile drives all remote reasoning. The production
+ * direction is OpenAI through Vercel server functions so the browser
+ * never holds a secret. The screenshot path is exclusively
  * editor.toImageDataUrl — no OCR, no shape JSON, no object parsing.
  */
 import {
@@ -59,7 +59,7 @@ const PANE_WIDTH_MIN = 320;
 const PANE_WIDTH_DEFAULT = 380;
 const PANE_WIDTH_MAX_HARD = 720;
 
-type Mode = 'math' | 'general';
+type Mode = 'math' | 'general' | 'voice';
 type Role = 'user' | 'assistant' | 'system' | 'error';
 
 interface CapturedImage {
@@ -92,6 +92,7 @@ interface Persisted {
   mathLog: LogEntry[];
   generalDraft: string;
   generalLog: LogEntry[];
+  voiceLog: LogEntry[];
 }
 
 interface Diag {
@@ -119,6 +120,7 @@ function defaultPersisted(): Persisted {
     mathLog: [],
     generalDraft: '',
     generalLog: [],
+    voiceLog: [],
   };
 }
 
@@ -140,6 +142,13 @@ function readActiveFromLegacy(legacy: LegacyV3): JobConfig {
   return legacy.ai?.mathSolve ?? legacy.ai?.mathRead ?? legacy.ai?.general ?? defaultJobConfig();
 }
 
+function hostedAiConfig(config?: Partial<AiConfig>): AiConfig {
+  if (config?.provider === 'openai') {
+    return { ...defaultJobConfig(), ...config, apiKey: '' };
+  }
+  return defaultJobConfig();
+}
+
 function loadPersisted(): Persisted {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -148,13 +157,14 @@ function loadPersisted(): Persisted {
       return {
         paneOpen: parsed.paneOpen ?? true,
         paneWidth: clampWidth(parsed.paneWidth ?? PANE_WIDTH_DEFAULT),
-        mode: parsed.mode === 'general' ? 'general' : 'math',
+        mode: parsed.mode === 'general' || parsed.mode === 'voice' ? parsed.mode : 'math',
         showSettings: parsed.showSettings ?? false,
-        ai: { ...defaultJobConfig(), ...(parsed.ai ?? {}) },
+        ai: hostedAiConfig(parsed.ai),
         verifiedInput: parsed.verifiedInput ?? '',
         mathLog: Array.isArray(parsed.mathLog) ? parsed.mathLog : [],
         generalDraft: parsed.generalDraft ?? '',
         generalLog: Array.isArray(parsed.generalLog) ? parsed.generalLog : [],
+        voiceLog: Array.isArray(parsed.voiceLog) ? parsed.voiceLog : [],
       };
     }
     // Try v3 migration before falling back to defaults.
@@ -166,11 +176,12 @@ function loadPersisted(): Persisted {
         paneWidth: PANE_WIDTH_DEFAULT,
         mode: legacy.mode === 'general' ? 'general' : 'math',
         showSettings: legacy.showSettings ?? false,
-        ai: readActiveFromLegacy(legacy),
+        ai: hostedAiConfig(readActiveFromLegacy(legacy)),
         verifiedInput: legacy.verifiedInput ?? '',
         mathLog: Array.isArray(legacy.mathLog) ? legacy.mathLog : [],
         generalDraft: legacy.generalDraft ?? '',
         generalLog: Array.isArray(legacy.generalLog) ? legacy.generalLog : [],
+        voiceLog: [],
       };
     }
   } catch {
@@ -300,6 +311,12 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
   const [generalLog, setGeneralLog] = useState<LogEntry[]>(initial.generalLog);
   const [generalSending, setGeneralSending] = useState(false);
 
+  const [voiceLog, setVoiceLog] = useState<LogEntry[]>(initial.voiceLog);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
   const [diag, setDiag] = useState<Diag | null>(null);
 
   const generalPromptRef = useRef<HTMLTextAreaElement | null>(null);
@@ -321,9 +338,9 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
     savePersisted({
       paneOpen, paneWidth, mode, showSettings, ai,
       verifiedInput, mathLog,
-      generalDraft, generalLog,
+      generalDraft, generalLog, voiceLog,
     });
-  }, [paneOpen, paneWidth, mode, showSettings, ai, verifiedInput, mathLog, generalDraft, generalLog]);
+  }, [paneOpen, paneWidth, mode, showSettings, ai, verifiedInput, mathLog, generalDraft, generalLog, voiceLog]);
 
 
   /* ─── horizontal resize handle ───────────────────────────────── */
@@ -413,7 +430,7 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
         ok: false,
         at: Date.now(),
       });
-      throw new Error(`${reason}${proxyHint}`);
+      throw new Error(`${reason}${proxyHint}`, { cause: e });
     }
   }, []);
 
@@ -552,6 +569,86 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
     }
   }, [generalSending, captured, generalDraft, ai, runChat, onToast]);
 
+  const transcribeVoice = useCallback(async (blob: Blob) => {
+    setTranscribing(true);
+    try {
+      const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: {
+          'content-type': blob.type || 'audio/webm',
+          'x-noteometry-filename': `noteometry-${Date.now()}.webm`,
+        },
+        body: blob,
+      });
+      const json = await res.json() as { transcript?: string; notes?: string; error?: string };
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const transcript = json.transcript?.trim() ?? '';
+      const notes = json.notes?.trim() ?? transcript;
+      setVoiceLog((prev) => [...prev, {
+        id: `v-${Date.now()}`,
+        role: 'assistant',
+        text: notes,
+        promptVersion: 'voice-transcribe-cleanup-v1',
+        ts: Date.now(),
+      }]);
+      if (transcript) {
+        setVoiceLog((prev) => [...prev, {
+          id: `vt-${Date.now()}`,
+          role: 'system',
+          text: `Raw transcript:\n${transcript}`,
+          promptVersion: 'gpt-4o-transcribe',
+          ts: Date.now(),
+        }]);
+      }
+      onToast?.('Voice notes transcribed.');
+    } catch (e) {
+      setVoiceLog((prev) => [...prev, {
+        id: `ve-${Date.now()}`,
+        role: 'error',
+        text: `Voice transcription failed — ${(e as Error).message}`,
+        ts: Date.now(),
+      }]);
+    } finally {
+      setTranscribing(false);
+    }
+  }, [onToast]);
+
+  const startRecording = useCallback(async () => {
+    if (recording || transcribing) return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      onToast?.('This browser does not support microphone recording.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        audioChunksRef.current = [];
+        if (blob.size > 0) void transcribeVoice(blob);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+      onToast?.('Recording voice note.');
+    } catch (e) {
+      onToast?.(`Could not start recording: ${(e as Error).message}`);
+    }
+  }, [recording, transcribing, transcribeVoice, onToast]);
+
+  const stopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === 'inactive') return;
+    recorder.stop();
+    mediaRecorderRef.current = null;
+    setRecording(false);
+  }, []);
+
   const focusAskAI = useCallback(() => {
     setPaneOpen(true); setMode('general');
     setTimeout(() => generalPromptRef.current?.focus(), 0);
@@ -570,7 +667,7 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
     savePersisted({
       paneOpen, paneWidth, mode, showSettings, ai,
       verifiedInput, mathLog,
-      generalDraft, generalLog,
+      generalDraft, generalLog, voiceLog,
     });
     setRecentlySaved(true);
     onToast?.('AI settings saved on this device.');
@@ -580,7 +677,7 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
     recentlySavedTimer.current = window.setTimeout(() => {
       setRecentlySaved(false);
     }, 1500);
-  }, [paneOpen, paneWidth, mode, showSettings, ai, verifiedInput, mathLog, generalDraft, generalLog, onToast]);
+  }, [paneOpen, paneWidth, mode, showSettings, ai, verifiedInput, mathLog, generalDraft, generalLog, voiceLog, onToast]);
 
   /* ─── copy actions ───────────────────────────────────────────── */
 
@@ -631,6 +728,7 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
       <div className="noteometry-mm-modetabs" role="tablist" aria-label="Pipeline">
         <button type="button" role="tab" aria-selected={mode === 'math'} className={`noteometry-mm-modetab${mode === 'math' ? ' is-active' : ''}`} onClick={() => setMode('math')}>Math</button>
         <button type="button" role="tab" aria-selected={mode === 'general'} className={`noteometry-mm-modetab${mode === 'general' ? ' is-active' : ''}`} onClick={() => setMode('general')}>General</button>
+        <button type="button" role="tab" aria-selected={mode === 'voice'} className={`noteometry-mm-modetab${mode === 'voice' ? ' is-active' : ''}`} onClick={() => setMode('voice')}>Voice</button>
       </div>
 
       {showSettings && (
@@ -655,13 +753,10 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
             config={ai}
             onChange={(c) => setAi(c)}
           />
-          {/* TODO(server-proxy): API keys persist in localStorage on this
-              device — acceptable for local dev. Move to a server-side
-              proxy or env-var backend before public/hosted deployment so
-              we are not shipping secrets to the browser. */}
           <p className="noteometry-mm-settings-note">
-            API keys are stored locally on this device. For shared/hosted
-            deployments, route calls through a server proxy instead.
+            Hosted Noteometry should run one OpenAI key on Vercel. Browser
+            keys are local-dev only; production calls must go through server
+            functions so every device can use the same model access safely.
           </p>
           <footer className="noteometry-mm-settings-footer">
             <button
@@ -699,7 +794,7 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
           onInputChange={setVerifiedInput}
           onCopyForWord={onCopyForWord}
         />
-      ) : (
+      ) : mode === 'general' ? (
         <GeneralPanel
           captured={captured}
           generalDraft={generalDraft}
@@ -713,6 +808,16 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
           onSend={() => void sendGeneral()}
           onCopyForWord={onCopyForWord}
           promptRef={generalPromptRef}
+        />
+      ) : (
+        <VoicePanel
+          recording={recording}
+          transcribing={transcribing}
+          voiceLog={voiceLog}
+          onStart={startRecording}
+          onStop={stopRecording}
+          onClear={() => setVoiceLog([])}
+          onCopyForWord={onCopyForWord}
         />
       )}
 
@@ -749,7 +854,7 @@ function StatusChips({ mode, diag, captured, verifiedReady, modelName }: {
   const connState = diag?.ok === false ? 'error' : 'ok';
   return (
     <section className="noteometry-mm-chips" aria-label="Status">
-      <span className={`noteometry-mm-chip is-${mode}`}>{mode === 'math' ? 'Math' : 'General'}</span>
+      <span className={`noteometry-mm-chip is-${mode}`}>{mode === 'math' ? 'Math' : mode === 'general' ? 'General' : 'Voice'}</span>
       <span className={`noteometry-mm-chip is-${connState}`} title={diag?.ok === false ? 'Last call failed — see Details' : 'Provider OK'}>
         {connState === 'error' ? 'Issue' : 'Connected'}
       </span>
@@ -1220,6 +1325,70 @@ function GeneralPanel(props: {
       </Card>
 
       <DetailsDisclosure diag={diag} history={generalLog} />
+    </>
+  );
+}
+
+/* ─── VOICE panel ──────────────────────────────────────────────── */
+
+function VoicePanel(props: {
+  recording: boolean;
+  transcribing: boolean;
+  voiceLog: LogEntry[];
+  onStart: () => void;
+  onStop: () => void;
+  onClear: () => void;
+  onCopyForWord: (text: string) => void;
+}) {
+  const { recording, transcribing, voiceLog, onStart, onStop, onClear, onCopyForWord } = props;
+  const latestResult = useMemo(
+    () => [...voiceLog].reverse().find((e) => e.role === 'assistant') ?? null,
+    [voiceLog],
+  );
+
+  return (
+    <>
+      <section className="noteometry-mm-actions" aria-label="Voice actions">
+        <ActionTile
+          label={recording ? 'Stop' : transcribing ? 'Transcribing…' : 'Record'}
+          icon={<span className="noteometry-mm-record-dot" />}
+          onClick={recording ? onStop : onStart}
+          disabled={transcribing}
+          accent={recording ? '#e2554f' : ACTION_ACCENT_ASK}
+        />
+        <ActionTile
+          label="Copy for Word"
+          icon={<WordIcon />}
+          onClick={() => latestResult && onCopyForWord(latestResult.text)}
+          disabled={!latestResult}
+          accent={ACTION_ACCENT_WORD}
+        />
+        <ActionTile
+          label="Clear"
+          icon={<TrashIcon />}
+          onClick={onClear}
+          disabled={voiceLog.length === 0 || recording || transcribing}
+          accent={ACTION_NEUTRAL}
+          variant="secondary"
+        />
+      </section>
+
+      <Card title="Recorder" accent={recording ? '#e2554f' : ACCENT_CARD_CAPTURE}>
+        <div className={`noteometry-mm-voice-state${recording ? ' is-recording' : ''}`}>
+          <span className="noteometry-mm-record-dot" aria-hidden="true" />
+          <span>{recording ? 'Recording… speak naturally.' : transcribing ? 'Turning voice into study notes…' : 'Ready to record a voice note.'}</span>
+        </div>
+      </Card>
+
+      <Card title="Voice Notes" accent={ACCENT_CARD_RESULT}>
+        {latestResult ? (
+          <ResultRender text={latestResult.text} />
+        ) : (
+          <CardPlaceholder label="No voice notes yet" />
+        )}
+      </Card>
+
+      <DetailsDisclosure diag={null} history={voiceLog} />
     </>
   );
 }

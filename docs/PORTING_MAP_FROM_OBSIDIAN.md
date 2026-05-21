@@ -111,7 +111,7 @@
 | **Old files** | `src/features/lasso/rasterize.ts`, `src/features/lasso/composite.ts`, `src/features/lasso/selection.ts`, `src/features/lasso/useLassoStack.ts`, `src/components/LassoOverlay.tsx`, `tests/unit/lassoSelection.test.ts` |
 | **Decision** | **IGNORE** code; **PORT the doctrine** |
 | **New target** | tldraw v5's `editor.toImageDataUrl(ids, {format:'png', …})` already gives us a "dumb pipe" with no interpretive layer. There is no analog for `html2canvas`-style DOM rasterization in noteometry-os today because the canvas is tldraw, not a DOM tree. |
-| **Risk notes** | When Drop-Ins™ land that aren't tldraw shapes (Table, PDF, Circuit Sniper, etc.), the rasterizer story will need a second pass: tldraw's exporter doesn't know about non-tldraw cards. Likely target: composite-snapshot lib that renders tldraw export *and* DOM-rasterizes Drop-In™ frames, then stitches. Capture the doctrine — *the rasterizer never interprets, the model does* — before writing that lib. |
+| **Risk notes** | When Drop-Ins™ land that aren't tldraw shapes (Table, PDF, Image, etc.), the rasterizer story will need a second pass: tldraw's exporter doesn't know about non-tldraw cards. Likely target: composite-snapshot lib that renders tldraw export *and* DOM-rasterizes Drop-In™ frames, then stitches. Capture the doctrine — *the rasterizer never interprets, the model does* — before writing that lib. |
 
 ---
 

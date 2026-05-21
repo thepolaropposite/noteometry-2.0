@@ -13,7 +13,7 @@ import {
 } from './components/Icons';
 import { useNoteometryNav } from './lib/useNoteometryNav';
 import DropInHost from './dropins/DropInHost';
-import { addDropIn } from './dropins/dropInStore';
+import { addDropIn, addImageDropIn } from './dropins/dropInStore';
 import type { DropInType } from './dropins/types';
 
 const ACCENT_DRAWING = '#5aa0e8';
@@ -59,6 +59,7 @@ export default function App() {
   const toastTimer = useRef<number | null>(null);
   const paneRef = useRef<MathMessagePaneHandle>(null);
   const canvasShellRef = useRef<HTMLDivElement | null>(null);
+  const lastCanvasPointRef = useRef<{ x: number; y: number } | null>(null);
   const [mathPaletteOpen, setMathPaletteOpen] = useState<boolean>(false);
   const [paletteStamp, setPaletteStamp] = useState<PaletteStamp | null>(null);
   const nav = useNoteometryNav();
@@ -72,7 +73,6 @@ export default function App() {
   // Track current tool so right-click menu can show ✓ next to the active tool.
   useEffect(() => {
     if (!editor) return;
-    setCurrentTool(editor.getCurrentToolId());
     const unsubscribe = editor.store.listen(() => {
       const next = editor.getCurrentToolId();
       setCurrentTool((prev) => (prev === next ? prev : next));
@@ -102,6 +102,43 @@ export default function App() {
     addDropIn(nav.activePage.id, type, x, y);
     showToast(`${typeLabel(type)} inserted.`);
   }, [nav.activePage.id, showToast]);
+
+  const shellPointFromClient = useCallback((clientX: number, clientY: number) => {
+    const shell = canvasShellRef.current;
+    if (!shell) return null;
+    const rect = shell.getBoundingClientRect();
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }, []);
+
+  const pasteImageFile = useCallback((file: File, point?: { x: number; y: number } | null) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') return;
+      const shell = canvasShellRef.current;
+      const target = point ?? (shell
+        ? { x: shell.clientWidth / 2, y: shell.clientHeight / 2 }
+        : { x: 260, y: 180 });
+      addImageDropIn(nav.activePage.id, result, file.name || 'Pasted image', target.x, target.y);
+      showToast('Image pasted onto the canvas.');
+    };
+    reader.readAsDataURL(file);
+  }, [nav.activePage.id, showToast]);
+
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+      const file = Array.from(e.clipboardData?.items ?? [])
+        .find((item) => item.kind === 'file' && item.type.startsWith('image/'))
+        ?.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      pasteImageFile(file, lastCanvasPointRef.current);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [pasteImageFile]);
 
   /** Drop a Math Palette stamp onto the raw canvas. This is the ONE
    *  permitted path that creates a tldraw text shape (Law 2 exception
@@ -196,7 +233,7 @@ export default function App() {
     ];
 
     setCtxMenu({ x: e.clientX, y: e.clientY, items });
-  }, [editor, currentTool, spawnDropIn, exportPng, showToast]);
+  }, [editor, currentTool, spawnDropIn, exportPng]);
 
   // tldraw's persistenceKey is the per-page store key. Using it as React
   // key too forces a clean remount when the active page changes, which is
@@ -207,7 +244,14 @@ export default function App() {
     <div className={`noteometry-os has-nav${pageRailOpen ? ' has-page-rail' : ''}${mmPaneOpen ? ' has-mm-pane' : ''}`}>
       <SectionTabs nav={nav} />
 
-      <div ref={canvasShellRef} className="noteometry-canvas-shell" onContextMenu={handleCanvasContextMenu}>
+      <div
+        ref={canvasShellRef}
+        className="noteometry-canvas-shell"
+        onContextMenu={handleCanvasContextMenu}
+        onPointerMove={(e) => {
+          lastCanvasPointRef.current = shellPointFromClient(e.clientX, e.clientY);
+        }}
+      >
         <OSBoundary>
           <Tldraw
             key={persistenceKey}
@@ -227,7 +271,12 @@ export default function App() {
               dropPaletteStamp(e.clientX, e.clientY);
             }}
             title={`Click to stamp "${paletteStamp.symbol}" (${paletteStamp.size}). Esc cancels.`}
-          />
+          >
+            <div className="noteometry-stamp-cue">
+              <span className="noteometry-stamp-cue-glyph">{paletteStamp.symbol}</span>
+              <span>Click canvas to place</span>
+            </div>
+          </div>
         )}
       </div>
 

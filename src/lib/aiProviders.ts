@@ -1,13 +1,11 @@
 /**
- * Provider catalog + the (single) OpenAI-compatible adapter that drives
- * LM Studio, OpenAI, Perplexity, xAI, and Custom endpoints. Anthropic
- * and Gemini are intentionally listed but unimplemented — the UI shows
- * the "Provider adapter not implemented yet" banner so Dan doesn't get
- * silently routed somewhere the call shape is wrong.
+ * Provider catalog + the current OpenAI-compatible adapter. The product
+ * direction is one remote OpenAI backend through Vercel; alternate
+ * providers remain here only as local-dev/past-experiment scaffolding
+ * until the hosted path is fully wired.
  *
- * API keys live in localStorage via the pane's persisted config. They
- * are never logged. The fetch path attaches them as `Authorization:
- * Bearer …` headers and that is the only place they are ever read.
+ * Hosted credentials must live in Vercel env vars, not localStorage.
+ * This local fetch path is retained for development and never logs keys.
  */
 import type {
   ProviderId,
@@ -32,13 +30,13 @@ export const PROVIDERS: Record<ProviderId, ProviderSpec> = {
   },
   openai: {
     id: 'openai',
-    label: 'OpenAI / ChatGPT',
-    defaultBaseUrl: 'https://api.openai.com/v1',
-    needsApiKey: true,
+    label: 'OpenAI / Vercel',
+    defaultBaseUrl: '/api',
+    needsApiKey: false,
     openAICompatible: true,
     implemented: true,
     modelsPath: '/models',
-    note: 'Requires sk-… API key. Note: browser CORS may block this — production should proxy.',
+    note: 'Hosted route. The browser never sees OPENAI_API_KEY.',
   },
   anthropic: {
     id: 'anthropic',
@@ -118,6 +116,7 @@ export function normalizeBaseUrl(input: string, providerId: ProviderId): string 
 
 /** Public helper used by the diagnostics strip / "WILL CALL" UI. */
 export function chatEndpointFor(job: JobConfig): string {
+  if (job.provider === 'openai') return '/api/chat';
   const base = normalizeBaseUrl(job.baseUrl || PROVIDERS[job.provider].defaultBaseUrl, job.provider);
   return `${base.replace(/\/+$/, '')}/chat/completions`;
 }
@@ -125,6 +124,7 @@ export function chatEndpointFor(job: JobConfig): string {
 export function modelsEndpointFor(job: JobConfig): string | null {
   const spec = PROVIDERS[job.provider];
   if (!spec.modelsPath) return null;
+  if (job.provider === 'openai') return '/api/models';
   const base = normalizeBaseUrl(job.baseUrl || spec.defaultBaseUrl, job.provider);
   return `${base.replace(/\/+$/, '')}${spec.modelsPath}`;
 }
@@ -252,9 +252,9 @@ export async function testProvider(job: JobConfig): Promise<{ ok: boolean; endpo
 
 export function defaultJobConfig(): JobConfig {
   return {
-    provider: 'lmstudio',
-    baseUrl: PROVIDERS.lmstudio.defaultBaseUrl,
+    provider: 'openai',
+    baseUrl: PROVIDERS.openai.defaultBaseUrl,
     apiKey: '',
-    model: 'google/gemma-4-26b-a4b',
+    model: 'gpt-4o',
   };
 }

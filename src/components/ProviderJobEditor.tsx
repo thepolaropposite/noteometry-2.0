@@ -12,10 +12,10 @@ import { useCallback, useState } from 'react';
 import type { JobConfig, ProviderId } from '../lib/aiTypes';
 import { PROVIDERS, listModels, testProvider, chatEndpointFor } from '../lib/aiProviders';
 
-// SECURITY NOTE: API keys are persisted in localStorage on this device.
-// That is acceptable for local development against LM Studio + occasional
-// remote APIs. Before public/hosted deployment, route calls through a
-// server-side proxy or env-var backend so secrets never reach the browser.
+// SECURITY NOTE: the hosted product should use one OpenAI key from a
+// Vercel environment variable and route calls through server functions.
+// This editor remains as a local-dev escape hatch until that backend is
+// wired, but it is not the production credential path.
 
 interface Props {
   jobLabel: string;
@@ -160,7 +160,7 @@ export default function ProviderJobEditor({ jobLabel, jobDescription, config, on
               {keyVisible ? 'Hide' : 'Show'}
             </button>
           </div>
-          <span className="noteometry-mm-hint">Stored locally on this device · never logged.</span>
+          <span className="noteometry-mm-hint">Local-dev only. Hosted Noteometry uses Vercel env vars.</span>
         </label>
       )}
 

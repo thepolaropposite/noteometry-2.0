@@ -16,6 +16,7 @@
  *     a clean in-card error with "Replace" and "Open in new tab" so the
  *     user always has a way forward.
  */
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useState } from 'react';
 import type { PdfState } from './types';
 import { updatePdfState } from './dropInStore';
