@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Tldraw, Editor, createShapeId, toRichText, type TLEditorSnapshot } from 'tldraw';
+import {
+  Tldraw, Editor, createShapeId, createTLStore, defaultAssetUtils, defaultBindingUtils,
+  defaultShapeUtils, toRichText, type TLEditorSnapshot,
+} from 'tldraw';
 import { toPng } from 'html-to-image';
 import 'tldraw/tldraw.css';
 import MathMessagePane, { type MathMessagePaneHandle } from './components/MathMessagePane';
@@ -71,10 +74,14 @@ export default function App() {
   const [mathPaletteOpen, setMathPaletteOpen] = useState<boolean>(false);
   const [paletteStamp, setPaletteStamp] = useState<PaletteStamp | null>(null);
   const nav = useNoteometryNav();
-  const canvasSnapshot = useMemo(
-    () => readCanvasBackup(nav.activePage.id)?.snapshot,
-    [nav.activePage.id]
-  );
+  const activePageId = nav.activePage.id;
+  const mountedEditorPageRef = useRef<string | null>(null);
+  const canvasStore = useMemo(() => createTLStore({
+    shapeUtils: defaultShapeUtils,
+    bindingUtils: defaultBindingUtils,
+    assetUtils: defaultAssetUtils,
+    snapshot: readCanvasBackup(activePageId)?.snapshot,
+  }), [activePageId]);
 
   const showToast = useCallback((msg: string, ms = 2400) => {
     setToast(msg);
@@ -110,6 +117,7 @@ export default function App() {
   }, [editor]);
 
   const handleMount = useCallback((e: Editor) => {
+    mountedEditorPageRef.current = activePageId;
     setEditor(e);
     // tldraw's internal grid is disabled — Noteometry paints its own
     // engineering-paper grid on the canvas-shell via CSS gradients, and
@@ -117,14 +125,21 @@ export default function App() {
     e.updateInstanceState({ isGridMode: false });
     e.user.updateUserPreferences({ colorScheme: 'dark' });
     setCurrentTool(e.getCurrentToolId());
-  }, []);
+    return () => {
+      if (mountedEditorPageRef.current === activePageId) mountedEditorPageRef.current = null;
+      setEditor((prev) => (prev === e ? null : prev));
+    };
+  }, [activePageId]);
 
   useEffect(() => {
     if (!editor) return;
-    const key = `${CANVAS_BACKUP_PREFIX}${nav.activePage.id}`;
-    const readBackup = () => readCanvasBackup(nav.activePage.id);
+    const pageId = mountedEditorPageRef.current;
+    if (!pageId || pageId !== activePageId) return;
+    const key = `${CANVAS_BACKUP_PREFIX}${pageId}`;
+    const readBackup = () => readCanvasBackup(pageId);
     const currentShapeCount = () => editor.getCurrentPageShapeIds().size;
     const saveBackup = () => {
+      if (mountedEditorPageRef.current !== pageId) return;
       const shapeCount = currentShapeCount();
       const previous = readBackup();
       if (shapeCount === 0 && previous && previous.shapeCount > 0) return;
@@ -149,7 +164,7 @@ export default function App() {
       if (saveTimer !== null) window.clearTimeout(saveTimer);
       unsubscribe();
     };
-  }, [editor, nav.activePage.id]);
+  }, [editor, activePageId]);
 
   const setCanvasTool = useCallback((id: 'draw' | 'eraser' | 'select') => {
     if (!editor) return;
@@ -174,10 +189,10 @@ export default function App() {
     const target = point ?? (shell
       ? { x: shell.clientWidth / 2, y: shell.clientHeight / 2 }
       : { x: 260, y: 180 });
-    addDropIn(nav.activePage.id, type, target.x, target.y);
+    addDropIn(activePageId, type, target.x, target.y);
     const label = type === 'pdf' ? 'PDF' : `${type[0].toUpperCase()}${type.slice(1)}`;
     showToast(`${label} Drop-In added.`);
-  }, [nav.activePage.id, showToast]);
+  }, [activePageId, showToast]);
 
   const pasteImageFile = useCallback((file: File, point?: { x: number; y: number } | null) => {
     const reader = new FileReader();
@@ -188,11 +203,11 @@ export default function App() {
       const target = point ?? (shell
         ? { x: shell.clientWidth / 2, y: shell.clientHeight / 2 }
         : { x: 260, y: 180 });
-      addImageDropIn(nav.activePage.id, result, file.name || 'Pasted image', target.x, target.y);
+      addImageDropIn(activePageId, result, file.name || 'Pasted image', target.x, target.y);
       showToast('Image pasted onto the canvas.');
     };
     reader.readAsDataURL(file);
-  }, [nav.activePage.id, showToast]);
+  }, [activePageId, showToast]);
 
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
@@ -384,9 +399,9 @@ export default function App() {
   }, [currentTool, setCanvasTool, shellPointFromClient, spawnDropIn]);
 
   // The React key forces a clean remount when the active page changes.
-  // Noteometry owns the page snapshot now; tldraw's IndexedDB persistence
-  // loaded late enough to overwrite fresh ink after reload.
-  const persistenceKey = `nm-page-${nav.activePage.id}`;
+  // Noteometry owns the per-page store and localStorage snapshot; tldraw's
+  // async IndexedDB persistence is deliberately not in this path.
+  const persistenceKey = `nm-page-${activePageId}`;
 
   return (
     <div className={`noteometry-os has-nav${pageRailOpen ? ' has-page-rail' : ''}${mmPaneOpen ? ' has-mm-pane' : ''}`}>
@@ -403,7 +418,7 @@ export default function App() {
         <OSBoundary>
           <Tldraw
             key={persistenceKey}
-            snapshot={canvasSnapshot}
+            store={canvasStore}
             hideUi
             onMount={handleMount}
           />
