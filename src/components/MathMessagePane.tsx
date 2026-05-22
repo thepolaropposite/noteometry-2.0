@@ -12,10 +12,10 @@
  *     6. Solve: TEXT-ONLY call with mathV12.ts system + injected input
  *     7. Answer joins the chat log with Copy-for-Word / Copy-LaTeX / Copy-plain
  *
- *   GENERAL pipeline
+ *   MESSAGE pipeline
  *     1. lasso anything
- *     2. Capture General: vision call with generalVision.ts prompt + user text
- *     3. Answer joins the general chat log
+ *     2. Capture: vision call with generalVision.ts prompt + optional user text
+ *     3. Answer joins the message log
  *
  * One active AI profile drives all remote reasoning. The production
  * direction is OpenAI through Vercel server functions so the browser
@@ -251,7 +251,7 @@ function compositeVerifiedInput(r: ReadResult): string {
  * overhaul; ResultRender handles assistant rendering and there is no
  * user-message surface now. */
 
-/* ─── handle exposed to App.tsx for the right-click menu ─────────── */
+/* ─── optional handle for external pane open/focus commands ──────── */
 
 export interface MathMessagePaneHandle {
   setMode: (mode: Mode) => void;
@@ -769,7 +769,7 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
       <div className="noteometry-mm-scroll">
         <div className="noteometry-mm-modetabs" role="tablist" aria-label="Pipeline">
           <button type="button" role="tab" aria-selected={mode === 'math'} className={`noteometry-mm-modetab${mode === 'math' ? ' is-active' : ''}`} onClick={() => setMode('math')}>Math</button>
-          <button type="button" role="tab" aria-selected={mode === 'general'} className={`noteometry-mm-modetab${mode === 'general' ? ' is-active' : ''}`} onClick={() => setMode('general')}>General</button>
+          <button type="button" role="tab" aria-selected={mode === 'general'} className={`noteometry-mm-modetab${mode === 'general' ? ' is-active' : ''}`} onClick={() => setMode('general')}>Message</button>
           <button type="button" role="tab" aria-selected={mode === 'voice'} className={`noteometry-mm-modetab${mode === 'voice' ? ' is-active' : ''}`} onClick={() => setMode('voice')}>Voice</button>
         </div>
 
@@ -896,7 +896,7 @@ function StatusChips({ mode, diag, captured, verifiedReady, modelName }: {
   const connState = diag?.ok === false ? 'error' : 'ok';
   return (
     <section className="noteometry-mm-chips" aria-label="Status">
-      <span className={`noteometry-mm-chip is-${mode}`}>{mode === 'math' ? 'Math' : mode === 'general' ? 'General' : 'Voice'}</span>
+      <span className={`noteometry-mm-chip is-${mode}`}>{mode === 'math' ? 'Math' : mode === 'general' ? 'Message' : 'Voice'}</span>
       <span className={`noteometry-mm-chip is-${connState}`} title={diag?.ok === false ? 'Last call failed — see Details' : 'Provider OK'}>
         {connState === 'error' ? 'Issue' : 'Connected'}
       </span>
@@ -1113,10 +1113,10 @@ function MathFlowBar({ captured, verifiedReady, computing, hasResult }: {
   hasResult: boolean;
 }) {
   const stages = [
-    { label: 'Evidence', active: !captured, done: captured },
-    { label: 'Interpret', active: captured && !verifiedReady, done: verifiedReady },
+    { label: 'Lasso', active: !captured, done: captured },
+    { label: 'Read', active: captured && !verifiedReady, done: verifiedReady },
     { label: 'Verify', active: verifiedReady && !hasResult && !computing, done: hasResult },
-    { label: 'Compute', active: computing, done: hasResult },
+    { label: 'Solve', active: computing, done: hasResult },
   ];
   return (
     <section className="noteometry-mm-flow" aria-label="Math processor flow">
@@ -1196,19 +1196,19 @@ function MathPanel(props: {
             <h3 className="noteometry-mm-engine-title">Math Processor</h3>
           </div>
           <div className="noteometry-mm-engine-model">
-            Vision → MathML → Compute
+            Lasso → Read → Verify → Solve
           </div>
         </div>
         <div className="noteometry-mm-engine-actions">
           <EngineButton
-            label={reading ? 'Interpreting…' : 'Interpret Selection'}
+            label={reading ? 'Reading…' : 'Read Math'}
             icon={<EyeIcon />}
             onClick={onReadMath}
             disabled={reading}
             tone="blue"
           />
           <EngineButton
-            label={solving ? 'Computing…' : 'Compute'}
+            label={solving ? 'Solving…' : 'Solve'}
             icon={<SolveIcon />}
             onClick={onSolve}
             disabled={!canSolve}
@@ -1245,7 +1245,7 @@ function MathPanel(props: {
             onClick={onClearInput}
             disabled={!verifiedInput}
           >
-            Clear
+            Clear Input
           </button>
         )}
       >
@@ -1291,7 +1291,7 @@ function MathPanel(props: {
             className="noteometry-mm-card-action-btn"
             onClick={() => onCopyForWord(latestResult.text)}
           >
-            Copy result
+            Copy for Word
           </button>
         ) : undefined}
       >
@@ -1348,7 +1348,7 @@ function GeneralPanel(props: {
 
   return (
     <>
-      <section className="noteometry-mm-actions" aria-label="General actions">
+      <section className="noteometry-mm-actions" aria-label="Message actions">
         <ActionTile
           label="Capture"
           icon={<CameraIcon />}
@@ -1388,7 +1388,7 @@ function GeneralPanel(props: {
       >
         {captured ? (
           <figure className="noteometry-mm-thumb">
-            <img src={captured.dataUrl} alt="General capture preview" />
+            <img src={captured.dataUrl} alt="Message capture preview" />
             <figcaption>{captured.width}×{captured.height} · {captured.shapeCount} shape{captured.shapeCount === 1 ? '' : 's'}</figcaption>
           </figure>
         ) : (

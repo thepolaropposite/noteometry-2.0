@@ -73,31 +73,27 @@ test.describe('Noteometry OS — regression sweep', () => {
     await expect(settings).toBeVisible();
   });
 
-  test('Settings has Provider / Base URL / API Key / Model / Test Connection / Save', async ({ page }) => {
+  test('Settings has Provider / Base URL / Model / Test Provider / Save', async ({ page }) => {
     await openApp(page);
     const pane = await ensurePaneOpen(page);
     await pane.locator('button[title="Provider settings"]').click();
     const settings = pane.locator('section.noteometry-mm-settings');
     // Provider dropdown.
     await expect(settings.locator('select')).toBeVisible();
-    // Base URL + Model inputs (Base URL always present; API key conditional
-    // on provider needing one — switch to OpenAI to surface it).
+    // Base URL + Model inputs are always present. Hosted OpenAI intentionally
+    // does not expose a browser API-key field.
     const fields = settings.locator('label.noteometry-mm-field');
     await expect(fields).toHaveCount(2, { timeout: 2000 }).catch(async () => {
       // Some providers add an API key field, making it 3. Both are valid.
       const c = await fields.count();
       expect.soft(c, 'expected 2 or 3 field labels').toBeGreaterThanOrEqual(2);
     });
-    // Switch to OpenAI to force the API key field.
+    // OpenAI is the hosted route: the key lives on Vercel, not in the browser.
     await settings.locator('select').selectOption('openai');
-    await expect(settings.locator('input[type="password"], input[type="text"]').filter({ hasText: /sk-/ })).toHaveCount(0); // type=password; placeholder is sk-…
-    await expect(settings.locator('input[placeholder="sk-…"]')).toBeVisible();
+    await expect(settings.locator('input[type="password"]')).toHaveCount(0);
     // Test Provider button.
     await expect(settings.getByRole('button', { name: /test provider/i })).toBeVisible();
-    // Save is implicit (no explicit Save button — settings persist on edit).
-    // Surface that as a soft assertion so the report records it.
-    const saveButton = settings.getByRole('button', { name: /^save$/i });
-    expect.soft(await saveButton.count(), 'a "Save" button is not present in settings').toBeGreaterThan(0);
+    await expect(settings.getByRole('button', { name: /^save$/i })).toBeVisible();
   });
 
   test('Only one active AI profile editor is present (no triple Math Read/Solve/General)', async ({ page }) => {
@@ -142,11 +138,11 @@ test.describe('Noteometry OS — regression sweep', () => {
     expect(varValue).toBe('0px');
   });
 
-  test('General mode draft has a × clear button', async ({ page }) => {
+  test('Message mode draft has a × clear button', async ({ page }) => {
     await openApp(page);
     const pane = await ensurePaneOpen(page);
-    // Switch to General mode.
-    await pane.getByRole('tab', { name: 'General' }).click();
+    // Switch to Message mode.
+    await pane.getByRole('tab', { name: 'Message' }).click();
     const textarea = pane.locator('.noteometry-mm-composer textarea');
     await textarea.fill('hello');
     const clearBtn = pane.locator('button.noteometry-mm-composer-clear');
@@ -176,22 +172,10 @@ test.describe('Noteometry OS — regression sweep', () => {
     await pane.getByRole('tab', { name: 'Math' }).click();
     await expect(pane).not.toContainText(/view prompt/i);
     await expect(pane).not.toContainText(/copy prompt/i);
-    // General mode.
-    await pane.getByRole('tab', { name: 'General' }).click();
+    // Message mode.
+    await pane.getByRole('tab', { name: 'Message' }).click();
     await expect(pane).not.toContainText(/view prompt/i);
     await expect(pane).not.toContainText(/copy prompt/i);
-  });
-
-  test('Math icon SVG path is the fixed forward-facing Sigma (no backwards path)', async ({ page }) => {
-    await openApp(page);
-    const menu = await openContextMenu(page);
-    // The Drop-Ins section uses MathIcon for the Math entry. The fixed
-    // path is "M18 5H6l6 7-6 7h12" (V tip on left). The old backwards
-    // path was "M5 5h10l-5 7 5 7H5".
-    const paths = menu.locator('button:has-text("Math") svg path');
-    const firstPath = await paths.first().getAttribute('d');
-    expect.soft(firstPath, 'Math menu icon path').toBe('M18 5H6l6 7-6 7h12');
-    // Also check the standalone Math Palette item if it carries the same icon family.
   });
 
   test('Math Palette opens from right-click and shows Large/Small only', async ({ page }) => {
@@ -218,7 +202,7 @@ test.describe('Noteometry OS — regression sweep', () => {
     await expect(palette).not.toContainText(/subscript/i);
   });
 
-  test('Math Palette stamps land on the canvas as single-character tldraw text shapes', async ({ page }) => {
+  test('Math Palette stamps land on the canvas as single-character ink text marks', async ({ page }) => {
     await openApp(page);
     const menu = await openContextMenu(page);
     await menu.getByRole('button', { name: /math palette/i }).click();
@@ -234,25 +218,52 @@ test.describe('Noteometry OS — regression sweep', () => {
     const box = await shell.boundingBox();
     if (!box) throw new Error('canvas shell has no bbox');
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    // A tldraw text shape now exists. tldraw renders multiple DOM nodes
-    // per shape (overlay + content + indicator), so count distinct shape
-    // wrappers via the data-shape-type attribute. Allow 1..N because
-    // the same stamp arms by default so the user can drop multiples —
-    // we just dropped one.
-    const shapes = page.locator('[data-shape-type="text"]');
-    await expect.poll(async () => shapes.count(), { timeout: 4000 }).toBeGreaterThanOrEqual(1);
+    // A custom SVG ink text mark now exists. Allow 1..N because the same
+    // stamp arms by default so the user can drop multiples — we just
+    // dropped one.
+    const marks = page.locator('.noteometry-ink-text');
+    await expect.poll(async () => marks.count(), { timeout: 4000 }).toBeGreaterThanOrEqual(1);
     // The text content of the first shape should be the chosen glyph (α).
-    const text = await page.locator('.tl-text-content').first().textContent({ timeout: 2000 }).catch(() => null);
-    expect.soft(text ?? '', 'stamped glyph rendered in tldraw text shape').toMatch(/α|alpha/i);
+    const text = await marks.first().textContent({ timeout: 2000 }).catch(() => null);
+    expect.soft(text ?? '', 'stamped glyph rendered in ink text mark').toMatch(/α|alpha/i);
   });
 
   test('Right-click menu has no AI commands (Read Math / Solve / Capture General / Ask AI)', async ({ page }) => {
     await openApp(page);
     const menu = await openContextMenu(page);
-    await expect(menu).not.toContainText(/read math/i);
-    await expect(menu).not.toContainText(/solve verified math/i);
-    await expect(menu).not.toContainText(/capture general/i);
-    await expect(menu).not.toContainText(/^ask ai$/im);
+    await expect(menu.locator('.noteometry-ctx-header').filter({ hasText: /^AI$/i })).toHaveCount(0);
+    await expect(menu.getByRole('button', { name: /^read math$/i })).toHaveCount(0);
+    await expect(menu.getByRole('button', { name: /^solve$/i })).toHaveCount(0);
+    await expect(menu.getByRole('button', { name: /^solve verified math$/i })).toHaveCount(0);
+    await expect(menu.getByRole('button', { name: /^capture general$/i })).toHaveCount(0);
+    await expect(menu.getByRole('button', { name: /^ask ai$/i })).toHaveCount(0);
+  });
+
+  test('Right-click menu keeps canvas tool and insertion commands', async ({ page }) => {
+    await openApp(page);
+    const menu = await openContextMenu(page);
+    await expect(menu.getByRole('button', { name: /ink/i })).toBeVisible();
+    await expect(menu.getByRole('button', { name: /eraser/i })).toBeVisible();
+    await expect(menu.getByRole('button', { name: /lasso/i })).toBeVisible();
+    await expect(menu.getByRole('button', { name: /text drop-in/i })).toBeVisible();
+    await expect(menu.getByRole('button', { name: /table drop-in/i })).toBeVisible();
+    await expect(menu.getByRole('button', { name: /image drop-in/i })).toBeVisible();
+    await expect(menu.getByRole('button', { name: /pdf drop-in/i })).toBeVisible();
+  });
+
+  test('AI pane owns Math and Message processing controls', async ({ page }) => {
+    await openApp(page);
+    const pane = await ensurePaneOpen(page);
+    await pane.getByRole('tab', { name: 'Math' }).click();
+    await expect(pane.getByRole('button', { name: /^read math$/i })).toBeVisible();
+    await expect(pane.getByRole('button', { name: /^solve$/i })).toBeVisible();
+    await expect(pane.getByRole('button', { name: /^clear input$/i })).toBeVisible();
+    await expect(pane.locator('section.noteometry-mm-preview-panel textarea')).toBeVisible();
+
+    await pane.getByRole('tab', { name: 'Message' }).click();
+    await expect(pane.getByRole('button', { name: /^capture$/i })).toBeVisible();
+    await expect(pane.getByRole('button', { name: /^ask$/i })).toBeVisible();
+    await expect(pane.locator('.noteometry-mm-composer textarea')).toBeVisible();
   });
 
   test('Right-click Drop-Ins section has no Chat entry', async ({ page }) => {
@@ -273,7 +284,7 @@ test.describe('Noteometry OS — regression sweep', () => {
   test('PDF Drop-In renders its empty-state file picker + URL fallback', async ({ page }) => {
     await openApp(page);
     const menu = await openContextMenu(page);
-    await menu.getByRole('button', { name: /^pdf$/i }).click();
+    await menu.getByRole('button', { name: /pdf drop-in/i }).click();
     const frame = page.locator('.noteometry-dropin-frame.is-pdf');
     await expect(frame).toBeVisible();
     await expect(frame.locator('input[type="file"][accept="application/pdf"]')).toHaveCount(1);
@@ -283,7 +294,7 @@ test.describe('Noteometry OS — regression sweep', () => {
   test('PDF Drop-In switches to iframe when a URL is supplied', async ({ page }) => {
     await openApp(page);
     const menu = await openContextMenu(page);
-    await menu.getByRole('button', { name: /^pdf$/i }).click();
+    await menu.getByRole('button', { name: /pdf drop-in/i }).click();
     const frame = page.locator('.noteometry-dropin-frame.is-pdf');
     const urlInput = frame.locator('input[placeholder*=".pdf"]');
     await urlInput.fill('https://example.com/example.pdf');
@@ -395,7 +406,7 @@ test.describe('Noteometry OS — regression sweep', () => {
   test('Persistence: a Drop-In spawned via right-click survives reload', async ({ page }) => {
     await openApp(page);
     const menu = await openContextMenu(page);
-    await menu.getByRole('button', { name: /^text$/i }).click();
+    await menu.getByRole('button', { name: /text drop-in/i }).click();
     await expect(page.locator('.noteometry-dropin-frame.is-text')).toHaveCount(1);
     await page.reload();
     await page.locator(`${PANE_SELECTOR}, ${PANE_HANDLE}`).first().waitFor({ state: 'visible' });

@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toPng } from 'html-to-image';
-import MathMessagePane, { type MathMessagePaneHandle } from './components/MathMessagePane';
+import MathMessagePane from './components/MathMessagePane';
 import ContextMenu, { type ContextMenuItem } from './components/ContextMenu';
 import SectionTabs from './components/SectionTabs';
 import PageRail from './components/PageRail';
 import MathPalette, { type PaletteStamp } from './components/MathPalette';
 import {
   PenIcon, EraserIcon, CursorIcon, TextIcon, TableIcon, ImageIcon, PdfIcon,
-  MathPaletteIcon, MathIcon, SolveIcon, ZoomInIcon, ZoomOutIcon, ResetViewIcon,
+  MathPaletteIcon, ZoomInIcon, ZoomOutIcon, ResetViewIcon,
 } from './components/Icons';
 import { useNoteometryNav } from './lib/useNoteometryNav';
 import DropInHost from './dropins/DropInHost';
@@ -224,7 +224,6 @@ export default function App() {
   const [pageRailOpen, setPageRailOpen] = useState<boolean>(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const toastTimer = useRef<number | null>(null);
-  const paneRef = useRef<MathMessagePaneHandle>(null);
   const canvasShellRef = useRef<HTMLDivElement | null>(null);
   const canvasWorldRef = useRef<HTMLDivElement | null>(null);
   const canvasContentRef = useRef<HTMLDivElement | null>(null);
@@ -625,20 +624,6 @@ export default function App() {
           : undefined),
       },
       { separator: true, label: '' },
-      { label: 'AI', header: true, accent: '#f3ba5b' },
-      {
-        label: 'Read Math',
-        iconNode: <MathIcon />,
-        accent: '#f3ba5b',
-        onClick: () => { void paneRef.current?.readMath(); },
-      },
-      {
-        label: 'Solve',
-        iconNode: <SolveIcon />,
-        accent: '#f3ba5b',
-        onClick: () => { void paneRef.current?.solveVerifiedMath(); },
-      },
-      { separator: true, label: '' },
       { label: 'Drop-Ins', header: true, accent: '#b58cff' },
       {
         label: 'Text Drop-In',
@@ -743,7 +728,6 @@ export default function App() {
       <PageRail nav={nav} onCollapsedChange={(collapsed) => setPageRailOpen(!collapsed)} />
 
       <MathMessagePane
-        ref={paneRef}
         editor={null}
         captureMixedSelection={captureMixedSelection}
         onPaneOpenChange={setMmPaneOpen}

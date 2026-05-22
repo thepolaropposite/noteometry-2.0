@@ -1,11 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:5173';
+
 /**
  * Playwright config for Noteometry OS dev regression sweeps.
  *
  * The dev server is expected to already be running at
- * http://localhost:5173/ — Playwright does not start vite for us so we
- * can re-run tests in parallel with a long-lived dev session.
+ * PLAYWRIGHT_BASE_URL (default http://localhost:5173/) — Playwright does
+ * not start vite for us so we can re-run tests in parallel with a
+ * long-lived dev session.
  *
  * If the dev server is not up the suite will fail fast with a
  * connection error, which is fine — the readme/regression report
@@ -17,7 +20,7 @@ export default defineConfig({
   retries: 0,
   reporter: [['list']],
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL,
     headless: true,
     actionTimeout: 5000,
     navigationTimeout: 15000,

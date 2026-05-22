@@ -92,11 +92,11 @@ The **AI Pane** is **persistent app chrome**, not a Drop-In™. It lives on the 
 
 The AI Pane owns:
 
-1. **Math pipeline** entry points (Read Math, Solve)
-2. **General pipeline** entry points (Capture General, Ask AI)
-3. **Provider/model settings** (per-job: Math Read / Math Solve / General)
-4. **Prompt inspection** (View Prompt + Copy Prompt; version labels surfaced)
-5. **Word/MathML export** (Copy for Word on every assistant message)
+1. **Math tab:** Read Math → Verify → Solve
+2. **Message tab:** selected screenshot + optional prompt → Ask
+3. **Voice tab:** voice transcription into usable note/text
+4. **Provider/model settings** for the single active hosted AI profile
+5. **Word/MathML export** (Copy for Word on assistant output)
 6. **Chat/result history** (mode-scoped logs; persisted to `localStorage`)
 
 The AI Pane is **not**:
@@ -117,9 +117,9 @@ The Math pipeline is a **two-hop, verification-gated** flow. No shortcuts.
 ```
 [1] User writes math on canvas (ink + Math Palette marks)
 [2] User lassos or selects the math region
-[3] User clicks Read Math (AI Pane, or right-click → Math → Read Math)
-[4] Noteometry captures a screenshot of the selection
-       (editor.toImageDataUrl — pixels only, no shape JSON, no OCR)
+[3] User clicks Read Math in the AI Pane
+[4] Noteometry captures the selected rendered canvas region as pixels
+       (visual PNG only, no shape JSON, no OCR)
 [5] Screenshot goes to the Math Read VISION model
        with the math-read-v1 transcription prompt
 [6] Model returns JSON: { plainText, latex, notes }
@@ -145,18 +145,18 @@ Non-negotiables:
 
 ---
 
-## Law 6 — General Pipeline Law
+## Law 6 — Message Pipeline Law
 
-The General pipeline is a **one-hop vision call** for mixed media.
+The Message pipeline is a **one-hop vision call** for mixed media.
 
 ```
 [1] User lassos / selects mixed media on the canvas
-[2] User clicks Capture General (AI Pane, or right-click)
-[3] Noteometry captures a screenshot of the selection
-[4] User types a prompt in the Ask AI textarea
+[2] User clicks Capture in the Message tab
+[3] Noteometry captures the selected rendered canvas region as pixels
+[4] User types an optional prompt in the Message tab
 [5] Send → screenshot + prompt → General VISION model
        with the general-vision-v1 system prompt
-[6] Answer lands in the AI Pane chat (General mode)
+[6] Answer lands in the AI Pane chat (Message mode)
 ```
 
 Non-negotiables:
@@ -164,7 +164,7 @@ Non-negotiables:
 - **No OCR.** Local OCR is forbidden; the model sees pixels.
 - **No shape JSON.** We never send tldraw shape records.
 - **No object parsing.** We never preprocess "[Text Box]" / "[Table]" placeholders. The v1.10 ChatDropin commit message and the rasterizer's "dumb pipe" doctrine apply.
-- The General prompt does **not** invoke Math v12 unless the user explicitly asks for it. General is the "ask anything about what I see" lane; Math is the deterministic lane.
+- The Message prompt does **not** invoke Math v12 unless the user explicitly asks for it. Message is the "ask anything about what I see" lane; Math is the deterministic lane.
 
 ---
 
@@ -192,7 +192,7 @@ What is **not** allowed on screen:
 - canvas-mounted tool buttons
 - second right-click menu / context-of-context menus
 
-The right-click menu's command set is the canonical surface; if a feature needs to be reachable, it goes here, full stop.
+The right-click menu's command set is the canonical surface for canvas tools and insertion. AI processing commands belong in the AI Pane.
 
 ---
 
@@ -221,7 +221,7 @@ Current prompt registry:
 |---|---|---|---|
 | Math Read | `math-read-v1` | `src/prompts/mathRead.ts` | Math pipeline, step 5 |
 | Math v12 | `math-v12-2026-03-09` | `src/prompts/mathV12.ts` | Math pipeline, step 10 (Solve) |
-| General Vision | `general-vision-v1` | `src/prompts/generalVision.ts` | General pipeline |
+| General Vision | `general-vision-v1` | `src/prompts/generalVision.ts` | Message pipeline |
 
 Rules:
 
