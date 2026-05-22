@@ -1319,16 +1319,104 @@ button {
 /* ─── Text body ─────────────────────────────────────────────── */
 
 .noteometry-dropin-text {
-  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   height: 100%;
+  min-height: 0;
+}
+
+.noteometry-dropin-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+
+.noteometry-dropin-toolbar button {
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid rgba(20, 24, 32, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #252a34;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.noteometry-dropin-toolbar button:hover:not(:disabled),
+.noteometry-dropin-toolbar button.is-active {
+  border-color: rgba(90, 160, 232, 0.72);
+  background: rgba(90, 160, 232, 0.14);
+  color: #0f3c68;
+}
+
+.noteometry-dropin-toolbar button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.noteometry-dropin-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: rgba(20, 24, 32, 0.16);
+}
+
+.noteometry-dropin-text-input {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   resize: none;
-  border: none;
+  border: 1px solid rgba(20, 24, 32, 0.18);
+  border-radius: 8px;
   outline: none;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.92);
   color: #171a20;
   font-family: var(--nm-font, system-ui, sans-serif);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
+  padding: 9px 10px;
+}
+
+.noteometry-dropin-text-input:focus {
+  border-color: rgba(90, 160, 232, 0.85);
+  box-shadow: 0 0 0 2px rgba(90, 160, 232, 0.12);
+}
+
+.noteometry-dropin-text-preview {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid rgba(20, 24, 32, 0.14);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #171a20;
+  font-family: var(--nm-font, system-ui, sans-serif);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.noteometry-dropin-text-preview .katex,
+.noteometry-dropin-table-preview .katex,
+.noteometry-mm-input-preview .katex,
+.noteometry-mm-result-body .katex {
+  font-size: 1.05em;
+}
+
+.noteometry-katex-error {
+  color: #9f2820;
+  font-family: var(--nm-font-mono, monospace);
+  font-size: 0.92em;
+}
+
+.noteometry-prose-bullet {
+  color: #3a70a7;
+  font-weight: 800;
 }
 
 /* ─── Table body ────────────────────────────────────────────── */
@@ -1336,31 +1424,64 @@ button {
 .noteometry-dropin-table {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
   width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
-.noteometry-dropin-table-row {
+.noteometry-dropin-table-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
   gap: 2px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
 }
 
 .noteometry-dropin-table-cell {
-  padding: 4px 6px;
+  min-width: 96px;
+  min-height: 32px;
+  padding: 6px 8px;
   border: 1px solid rgba(20, 24, 32, 0.22);
-  border-radius: 4px;
+  border-radius: 5px;
   background: #fff;
   color: #1b1d23;
   font-family: var(--nm-font, system-ui, sans-serif);
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
-  min-width: 0;
 }
 
 .noteometry-dropin-table-cell:focus {
   border-color: rgba(90, 160, 232, 0.85);
   background: #f4f8ff;
+  box-shadow: 0 0 0 2px rgba(90, 160, 232, 0.12);
+}
+
+.noteometry-dropin-table-preview-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid rgba(20, 24, 32, 0.14);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.noteometry-dropin-table-preview {
+  width: 100%;
+  border-collapse: collapse;
+  color: #171a20;
+  font-family: var(--nm-font, system-ui, sans-serif);
+  font-size: 13px;
+}
+
+.noteometry-dropin-table-preview td {
+  min-width: 96px;
+  min-height: 32px;
+  padding: 8px 10px;
+  border: 1px solid rgba(20, 24, 32, 0.16);
+  vertical-align: top;
+  line-height: 1.5;
 }
 
 /* ─── Math body ─────────────────────────────────────────────── */

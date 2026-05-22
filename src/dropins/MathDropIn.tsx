@@ -21,6 +21,7 @@ function tryRender(src: string): { html: string } | { error: string } {
   try {
     return {
       html: katex.renderToString(src, {
+        output: 'html',
         displayMode: true,
         throwOnError: true,
         strict: 'ignore',

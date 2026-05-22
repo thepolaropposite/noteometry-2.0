@@ -7,7 +7,7 @@
  *     1. lasso math on canvas
  *     2. Read Math: vision call with mathRead.ts prompt (transcribe only)
  *     3. result lands in editable "Verified Input" textarea
- *     4. Verified Input renders mixed prose + LaTeX as MathML live
+ *     4. Verified Input renders mixed prose + LaTeX/MathML as KaTeX live
  *     5. Dan corrects any recognition errors
  *     6. Solve: TEXT-ONLY call with mathV12.ts system + injected input
  *     7. Answer joins the chat log with Copy-for-Word / Copy-LaTeX / Copy-plain
@@ -44,7 +44,7 @@ import {
   GENERAL_VISION_PROMPT_VERSION,
   buildMathV12UserMessage,
 } from '../prompts';
-import { copyForWord, renderAsMathML } from '../lib/mathml';
+import { copyForWord, renderAsKatexHtml } from '../lib/mathml';
 import { markError, markSaved, markSaving } from '../lib/saveStatus';
 import {
   EyeIcon, SolveIcon, CameraIcon, AskIcon, TrashIcon, WordIcon,
@@ -1002,9 +1002,9 @@ function splitV12Sections(text: string): ResultSection[] {
   return out.filter((s) => s.kind === 'heading' || s.value.length > 0);
 }
 
-/** Render an assistant result. Math (v12 or otherwise) renders via
- *  KaTeX → MathML through renderAsMathML so equations are real, not
- *  raw escaped LaTeX. Section headers (Problem / Given / … / Answer)
+/** Render an assistant result. Math (v12 or otherwise) renders through
+ *  KaTeX so equations are real GUI math, not raw escaped LaTeX or raw
+ *  MathML. Section headers (Problem / Given / … / Answer)
  *  become visually distinct h4 rows; the final Answer block is
  *  highlighted. A "Show source" disclosure exposes the raw text. */
 function ResultRender({ text }: { text: string }) {
@@ -1030,7 +1030,7 @@ function ResultRender({ text }: { text: string }) {
               <div
                 key={`b-${i}`}
                 className="noteometry-mm-result-body"
-                dangerouslySetInnerHTML={{ __html: renderAsMathML(s.value) }}
+                dangerouslySetInnerHTML={{ __html: renderAsKatexHtml(s.value) }}
               />
             );
           })}
@@ -1038,7 +1038,7 @@ function ResultRender({ text }: { text: string }) {
       ) : (
         <div
           className="noteometry-mm-result-body"
-          dangerouslySetInnerHTML={{ __html: renderAsMathML(text) }}
+          dangerouslySetInnerHTML={{ __html: renderAsKatexHtml(text) }}
         />
       )}
       <button
@@ -1173,7 +1173,7 @@ function MathPanel(props: {
   } = props;
 
   const canSolve = verifiedInput.trim().length > 0 && !solving;
-  const verifiedPreviewHtml = useMemo(() => renderAsMathML(verifiedInput), [verifiedInput]);
+  const verifiedPreviewHtml = useMemo(() => renderAsKatexHtml(verifiedInput), [verifiedInput]);
   const latestResult = useMemo(
     () => [...mathLog].reverse().find((e) => e.role === 'assistant') ?? null,
     [mathLog],
@@ -1272,11 +1272,11 @@ function MathPanel(props: {
               ×
             </button>
           </div>
-          <div className="noteometry-mm-input-preview" aria-label="Verified input MathML preview">
+          <div className="noteometry-mm-input-preview" aria-label="Verified input KaTeX preview">
             {verifiedInput.trim() ? (
               <div dangerouslySetInnerHTML={{ __html: verifiedPreviewHtml }} />
             ) : (
-              <span className="noteometry-mm-preview-empty">Text and $LaTeX$ preview as MathML here.</span>
+              <span className="noteometry-mm-preview-empty">Text, $LaTeX$, and MathML preview here.</span>
             )}
           </div>
         </section>

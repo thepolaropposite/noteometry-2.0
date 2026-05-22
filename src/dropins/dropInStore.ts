@@ -81,12 +81,12 @@ function defaultsFor(type: DropInType): {
 } {
   switch (type) {
     case 'text':
-      return { title: 'Text Drop-In™', width: 260, height: 160, state: { text: '' } };
+      return { title: 'Text Drop-In™', width: 430, height: 260, state: { text: '' } };
     case 'table':
       return {
         title: 'Table Drop-In™',
-        width: 320,
-        height: 180,
+        width: 520,
+        height: 300,
         state: { rows: [['', '', ''], ['', '', ''], ['', '', '']] },
       };
     case 'math':

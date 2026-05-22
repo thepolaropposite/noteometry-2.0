@@ -30,7 +30,7 @@ export interface TextState {
 }
 
 export interface TableState {
-  /** Row-major; Phase 1 is a fixed 3×3 grid. */
+  /** Row-major editable grid. Rows/columns can grow from the UI. */
   rows: string[][];
 }
 
