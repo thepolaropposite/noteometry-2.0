@@ -224,3 +224,35 @@ export function InfoIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function ZoomInIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M15.5 15.5L21 21" />
+      <path d="M10.5 7.5v6" />
+      <path d="M7.5 10.5h6" />
+    </svg>
+  );
+}
+
+export function ZoomOutIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M15.5 15.5L21 21" />
+      <path d="M7.5 10.5h6" />
+    </svg>
+  );
+}
+
+export function ResetViewIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 4v6h6" />
+      <path d="M20 20v-6h-6" />
+      <path d="M6.2 15.5A7 7 0 0018.5 18" />
+      <path d="M17.8 8.5A7 7 0 005.5 6" />
+    </svg>
+  );
+}

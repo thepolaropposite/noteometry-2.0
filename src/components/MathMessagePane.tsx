@@ -47,7 +47,7 @@ import {
 import { copyForWord, renderAsMathML } from '../lib/mathml';
 import { markError, markSaved, markSaving } from '../lib/saveStatus';
 import {
-  EyeIcon, CameraIcon, AskIcon, TrashIcon, WordIcon,
+  EyeIcon, SolveIcon, CameraIcon, AskIcon, TrashIcon, WordIcon,
 } from './Icons';
 
 const STORAGE_KEY = 'noteometry-os:math-message-pane:v4';
@@ -330,22 +330,56 @@ const MathMessagePane = forwardRef<MathMessagePaneHandle, MathMessagePaneProps>(
   const resizeStateRef = useRef<null | { pointerId: number; startX: number; startW: number }>(null);
   const onResizePointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     resizeStateRef.current = { pointerId: e.pointerId, startX: e.clientX, startW: paneWidth };
   }, [paneWidth]);
-  const onResizePointerMove = useCallback((e: React.PointerEvent) => {
+
+  const applyResizePointerMove = useCallback((pointerId: number, clientX: number) => {
     const r = resizeStateRef.current;
-    if (!r || e.pointerId !== r.pointerId) return;
+    if (!r || pointerId !== r.pointerId) return;
     // Drag the left edge: moving LEFT increases width.
-    const next = clampWidth(r.startW + (r.startX - e.clientX));
+    const next = clampWidth(r.startW + (r.startX - clientX));
     setPaneWidth(next);
   }, []);
+
+  const finishResizePointer = useCallback((pointerId: number) => {
+    const r = resizeStateRef.current;
+    if (!r || pointerId !== r.pointerId) return;
+    resizeStateRef.current = null;
+  }, []);
+
+  const onResizePointerMove = useCallback((e: React.PointerEvent) => {
+    applyResizePointerMove(e.pointerId, e.clientX);
+  }, [applyResizePointerMove]);
+
   const onResizePointerUp = useCallback((e: React.PointerEvent) => {
     const r = resizeStateRef.current;
     if (!r || e.pointerId !== r.pointerId) return;
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    resizeStateRef.current = null;
-  }, []);
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* pointer capture may already be released */
+    }
+    finishResizePointer(e.pointerId);
+  }, [finishResizePointer]);
+
+  useEffect(() => {
+    const onWindowPointerMove = (e: PointerEvent) => {
+      applyResizePointerMove(e.pointerId, e.clientX);
+    };
+    const onWindowPointerEnd = (e: PointerEvent) => {
+      finishResizePointer(e.pointerId);
+    };
+    window.addEventListener('pointermove', onWindowPointerMove);
+    window.addEventListener('pointerup', onWindowPointerEnd);
+    window.addEventListener('pointercancel', onWindowPointerEnd);
+    return () => {
+      window.removeEventListener('pointermove', onWindowPointerMove);
+      window.removeEventListener('pointerup', onWindowPointerEnd);
+      window.removeEventListener('pointercancel', onWindowPointerEnd);
+    };
+  }, [applyResizePointerMove, finishResizePointer]);
 
   /* ─── capture ────────────────────────────────────────────────── */
 
@@ -1067,11 +1101,58 @@ const ACCENT_CARD_VERIFIED = '#f3ba5b';  // amber — human verification
 const ACCENT_CARD_RESULT = '#6ed18c';    // green — final answer
 const ACCENT_CARD_QUESTION = '#8b95a5';  // slate — user prompt
 
-const ACTION_ACCENT_READ = '#5aa0e8';
 const ACTION_ACCENT_WORD = '#a78bfa';
 const ACTION_ACCENT_CAPTURE = '#5aa0e8';
 const ACTION_ACCENT_ASK = '#6ed18c';
 const ACTION_NEUTRAL = '#8b95a5';
+
+function MathFlowBar({ captured, verifiedReady, computing, hasResult }: {
+  captured: boolean;
+  verifiedReady: boolean;
+  computing: boolean;
+  hasResult: boolean;
+}) {
+  const stages = [
+    { label: 'Evidence', active: !captured, done: captured },
+    { label: 'Interpret', active: captured && !verifiedReady, done: verifiedReady },
+    { label: 'Verify', active: verifiedReady && !hasResult && !computing, done: hasResult },
+    { label: 'Compute', active: computing, done: hasResult },
+  ];
+  return (
+    <section className="noteometry-mm-flow" aria-label="Math processor flow">
+      {stages.map((stage, index) => (
+        <div
+          key={stage.label}
+          className={`noteometry-mm-flow-step${stage.active ? ' is-active' : ''}${stage.done ? ' is-done' : ''}`}
+        >
+          <span className="noteometry-mm-flow-index">{index + 1}</span>
+          <span>{stage.label}</span>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function EngineButton({ label, icon, onClick, disabled = false, tone = 'blue' }: {
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: 'blue' | 'green' | 'purple' | 'neutral';
+}) {
+  return (
+    <button
+      type="button"
+      className={`noteometry-mm-engine-btn is-${tone}`}
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+    >
+      <span className="noteometry-mm-engine-btn-icon" aria-hidden="true">{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
+}
 
 function MathPanel(props: {
   captured: CapturedImage | null;
@@ -1097,35 +1178,53 @@ function MathPanel(props: {
     () => [...mathLog].reverse().find((e) => e.role === 'assistant') ?? null,
     [mathLog],
   );
+  const hasResult = !!latestResult;
 
   return (
     <>
-      <section className="noteometry-mm-actions" aria-label="Math actions">
-        <ActionTile
-          label={reading ? 'Reading…' : 'Read Math'}
-          icon={<EyeIcon />}
-          onClick={onReadMath}
-          disabled={reading}
-          accent={ACTION_ACCENT_READ}
-        />
-        <ActionTile
-          label="Copy for Word"
-          icon={<WordIcon />}
-          onClick={() => onCopyForWord(verifiedInput)}
-          disabled={!verifiedInput.trim()}
-          accent={ACTION_ACCENT_WORD}
-        />
-        <ActionTile
-          label="Clear Input"
-          icon={<TrashIcon />}
-          onClick={onClearInput}
-          disabled={!verifiedInput}
-          accent={ACTION_NEUTRAL}
-          variant="secondary"
-        />
+      <MathFlowBar
+        captured={!!captured}
+        verifiedReady={verifiedInput.trim().length > 0}
+        computing={solving}
+        hasResult={hasResult}
+      />
+
+      <section className="noteometry-mm-engine" aria-label="Math engine">
+        <div className="noteometry-mm-engine-head">
+          <div>
+            <div className="noteometry-mm-engine-kicker">Noteometry v3</div>
+            <h3 className="noteometry-mm-engine-title">Math Processor</h3>
+          </div>
+          <div className="noteometry-mm-engine-model">
+            Vision → MathML → Compute
+          </div>
+        </div>
+        <div className="noteometry-mm-engine-actions">
+          <EngineButton
+            label={reading ? 'Interpreting…' : 'Interpret Selection'}
+            icon={<EyeIcon />}
+            onClick={onReadMath}
+            disabled={reading}
+            tone="blue"
+          />
+          <EngineButton
+            label={solving ? 'Computing…' : 'Compute'}
+            icon={<SolveIcon />}
+            onClick={onSolve}
+            disabled={!canSolve}
+            tone="green"
+          />
+          <EngineButton
+            label="Copy MathML"
+            icon={<WordIcon />}
+            onClick={() => onCopyForWord(verifiedInput)}
+            disabled={!verifiedInput.trim()}
+            tone="purple"
+          />
+        </div>
       </section>
 
-      <Card title="Capture" accent={ACCENT_CARD_CAPTURE}>
+      <Card title="Evidence Capture" accent={ACCENT_CARD_CAPTURE}>
         {captured ? (
           <figure className="noteometry-mm-thumb">
             <img src={captured.dataUrl} alt="Math capture preview" />
@@ -1137,27 +1236,17 @@ function MathPanel(props: {
       </Card>
 
       <Card
-        title="Verified Input"
+        title="MathML Editor"
         accent={ACCENT_CARD_VERIFIED}
         action={(
-          <>
-            <button
-              type="button"
-              className="noteometry-mm-card-action-btn"
-              onClick={onSolve}
-              disabled={!canSolve}
-            >
-              {solving ? 'Solving…' : 'Solve'}
-            </button>
-            <button
-              type="button"
-              className="noteometry-mm-card-action-btn"
-              onClick={() => onCopyForWord(verifiedInput)}
-              disabled={!verifiedInput.trim()}
-            >
-              Copy MathML
-            </button>
-          </>
+          <button
+            type="button"
+            className="noteometry-mm-card-action-btn"
+            onClick={onClearInput}
+            disabled={!verifiedInput}
+          >
+            Clear
+          </button>
         )}
       >
         {/* The wrapper is intentionally a <section> with the legacy
@@ -1193,7 +1282,19 @@ function MathPanel(props: {
         </section>
       </Card>
 
-      <Card title="Result" accent={ACCENT_CARD_RESULT}>
+      <Card
+        title="Computed Result"
+        accent={ACCENT_CARD_RESULT}
+        action={latestResult ? (
+          <button
+            type="button"
+            className="noteometry-mm-card-action-btn"
+            onClick={() => onCopyForWord(latestResult.text)}
+          >
+            Copy result
+          </button>
+        ) : undefined}
+      >
         {latestResult ? (
           <ResultRender text={latestResult.text} />
         ) : solving ? (

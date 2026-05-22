@@ -58,6 +58,14 @@ button {
   position: relative;
   min-width: 100%;
   min-height: 100%;
+}
+
+.noteometry-canvas-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
   /* Engineering graph paper: battleship grey base, 1/8" (12px) minor grid,
    * 1" (96px) major grid. Treats 1 CSS in = 96px. Layered linear-gradients
    * draw the lines below Noteometry's ink layer. */
@@ -98,7 +106,6 @@ button {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
   filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.18));
 }
 
@@ -2331,6 +2338,186 @@ a.noteometry-dropin-action {
   white-space: nowrap;
 }
 
+.noteometry-mm-flow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.noteometry-mm-flow-step {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.noteometry-mm-flow-step.is-active {
+  border-color: rgba(243, 186, 91, 0.55);
+  background: rgba(243, 186, 91, 0.12);
+  color: #ffe2ad;
+}
+
+.noteometry-mm-flow-step.is-done {
+  border-color: rgba(110, 209, 140, 0.5);
+  background: rgba(110, 209, 140, 0.1);
+  color: #c7f8d3;
+}
+
+.noteometry-mm-flow-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-family: var(--nm-font-mono, monospace);
+  font-size: 10px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.noteometry-mm-engine {
+  margin: 10px 14px;
+  padding: 12px;
+  border: 1px solid rgba(142, 162, 255, 0.2);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(90, 160, 232, 0.12), rgba(110, 209, 140, 0.06)),
+    rgba(255, 255, 255, 0.03);
+}
+
+.noteometry-mm-engine-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.noteometry-mm-engine-kicker {
+  margin-bottom: 2px;
+  color: rgba(214, 221, 255, 0.68);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.noteometry-mm-engine-title {
+  margin: 0;
+  color: #f7f8ff;
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.noteometry-mm-engine-model {
+  max-width: 128px;
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.66);
+  font-family: var(--nm-font-mono, monospace);
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.noteometry-mm-engine-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+}
+
+.noteometry-mm-engine-btn {
+  min-width: 0;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f0f1f6;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: left;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+}
+
+.noteometry-mm-engine-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  flex: 0 0 auto;
+}
+
+.noteometry-mm-engine-btn-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.noteometry-mm-engine-btn.is-blue {
+  border-color: rgba(90, 160, 232, 0.42);
+  color: #d8ecff;
+}
+
+.noteometry-mm-engine-btn.is-green {
+  border-color: rgba(110, 209, 140, 0.42);
+  color: #d4f8dd;
+}
+
+.noteometry-mm-engine-btn.is-purple {
+  border-color: rgba(167, 139, 250, 0.42);
+  color: #ece5ff;
+}
+
+.noteometry-mm-engine-btn.is-neutral {
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.noteometry-mm-engine-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.noteometry-mm-engine-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
 /* Action row — large app-like tiles, responsive grid. */
 .noteometry-mm-actions {
   display: grid;
@@ -2591,6 +2778,11 @@ a.noteometry-dropin-action {
 /* Verified Input textarea — dyslexia-friendly spacing. */
 .noteometry-mm-textarea-wrap {
   position: relative;
+}
+
+.noteometry-mm-card .noteometry-mm-preview-panel {
+  padding: 0;
+  border-bottom: 0;
 }
 
 .noteometry-mm-textarea-wrap textarea,
