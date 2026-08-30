@@ -134,9 +134,19 @@ function openAiDevApi(): Plugin {
 }
 
 // https://vite.dev/config/
+// Note: server.strictPort + envPrefix + the build.target/sourcemap block
+// below are required by the Tauri desktop wrapper (src-tauri/), which
+// expects a fixed dev port and reads TAURI_ENV_* at build time. minify is
+// left on Vite's default (oxc, on this Vite 8 toolchain) rather than
+// forced to 'esbuild', which isn't installed as a standalone dependency
+// here and would break `vite build`. The OpenAI dev proxy and LM Studio
+// proxy are unrelated to Tauri and stay as-is.
 export default defineConfig({
   plugins: [react(), openAiDevApi()],
+  clearScreen: false,
   server: {
+    port: 5173,
+    strictPort: true,
     proxy: {
       '/lmstudio': {
         target: 'http://127.0.0.1:1234',
@@ -144,5 +154,11 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/lmstudio/, ''),
       },
     },
+  },
+  envPrefix: ['VITE_', 'TAURI_'],
+  build: {
+    target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari14',
+    minify: !process.env.TAURI_ENV_DEBUG,
+    sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
 })
