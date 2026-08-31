@@ -7,9 +7,13 @@
  * are Drop-Ins™ — self-contained mini-apps anchored to the canvas with
  * their own identity, title, position, size, state, UI, and lifecycle.
  *
- * Phase 1 ships four Drop-In™ types. Position is shell-relative CSS
- * pixels for now — tying it to canvas-space (so Drop-Ins™ pan/zoom with
- * tldraw) is a Phase 2 concern and is intentionally deferred.
+ * Phase 1 ships six Drop-In™ types. Position/size (x, y, width,
+ * height) are world-space units — the same coordinate space as ink
+ * strokes — not raw screen pixels. DropInHost is mounted inside
+ * .noteometry-canvas-content (see App.tsx), so CSS transform
+ * inheritance makes frames pan/zoom with the canvas automatically;
+ * DropInHost's drag/resize handlers convert screen-pixel pointer
+ * deltas back into these units via the current zoom.
  */
 
 export type DropInType = 'text' | 'table' | 'math' | 'chat' | 'image' | 'pdf';

@@ -703,7 +703,7 @@ export default function App() {
               onPointerPosition={(point) => { lastCanvasPointRef.current = point; }}
               hideSelection={isCapturingCanvas}
             />
-            <DropInHost pageId={activePageId} />
+            <DropInHost pageId={activePageId} zoom={canvasZoom} />
             {paletteStamp && (
               <div
                 className="noteometry-stamp-overlay"

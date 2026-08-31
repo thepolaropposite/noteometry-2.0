@@ -1,13 +1,25 @@
 /**
- * DropInHost — overlay above the tldraw canvas that renders every
+ * DropInHost — overlay above the ink canvas that renders every
  * Drop-In™ for the active page.
  *
  * Pointer semantics (Law 2): the host itself is `pointer-events: none`
- * so ink/select/eraser pass through to tldraw outside any Drop-In™.
- * Individual Drop-In™ frames flip to `pointer-events: auto`, so typing
- * and editing inside them works, and drag/resize captures the pointer
- * via setPointerCapture so tldraw never starts an unintended stroke
+ * so ink/select/eraser pass through outside any Drop-In™. Individual
+ * Drop-In™ frames flip to `pointer-events: auto`, so typing and editing
+ * inside them works, and drag/resize captures the pointer via
+ * setPointerCapture so the canvas never starts an unintended stroke
  * mid-drag.
+ *
+ * Canvas anchoring: this host is mounted inside .noteometry-canvas-content
+ * (see App.tsx), which carries the `transform: scale(canvasZoom)` that
+ * also scales the ink layer, and that content div's ancestor
+ * .noteometry-canvas-world is what actually scrolls inside the shell.
+ * Because of that DOM nesting, frame position/size — stored in the same
+ * un-scaled world-space units as ink strokes — already pans and zooms
+ * with the canvas for free; no separate pageToScreen sync is needed.
+ * The one thing CSS inheritance does NOT do for us is drag/resize input:
+ * pointer deltas arrive in real screen pixels, so they must be divided
+ * by `zoom` before being added to world-space x/y/width/height, or
+ * dragging/resizing drifts at any zoom level other than 100%.
  *
  * Right-click on a Drop-In™ deliberately bubbles up to the canvas-shell
  * so the flat right-click menu (Law 7) stays the canonical command
@@ -30,14 +42,17 @@ import PdfDropIn from './PdfDropIn';
 
 interface HostProps {
   pageId: string;
+  /** Current canvas zoom (see App.tsx canvasZoom). Drag/resize deltas
+   *  arrive in screen pixels and must be converted to world-space. */
+  zoom: number;
 }
 
-export default function DropInHost({ pageId }: HostProps) {
+export default function DropInHost({ pageId, zoom }: HostProps) {
   const items = useDropInsForPage(pageId);
   return (
     <div className="noteometry-dropin-host" aria-label="Drop-Ins">
       {items.map((d) => (
-        <DropInFrame key={d.id} pageId={pageId} dropIn={d} />
+        <DropInFrame key={d.id} pageId={pageId} dropIn={d} zoom={zoom} />
       ))}
     </div>
   );
@@ -49,9 +64,10 @@ const MIN_H = 96;
 interface FrameProps {
   pageId: string;
   dropIn: DropIn;
+  zoom: number;
 }
 
-function DropInFrame({ pageId, dropIn }: FrameProps) {
+function DropInFrame({ pageId, dropIn, zoom }: FrameProps) {
   // Local drag/resize state. We only commit to the store on pointerup so
   // every keystroke during a drag doesn't trigger localStorage writes.
   const [draft, setDraft] = useState<null | { x: number; y: number; width: number; height: number }>(null);
@@ -95,8 +111,13 @@ function DropInFrame({ pageId, dropIn }: FrameProps) {
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const d = dragRef.current;
     if (!d || e.pointerId !== d.pointerId) return;
-    const dx = e.clientX - d.startX;
-    const dy = e.clientY - d.startY;
+    // Pointer deltas are real screen pixels; dropIn.x/y/width/height are
+    // world-space (same units as ink), so convert through the current
+    // zoom before applying — otherwise drag/resize drift off-cursor at
+    // any zoom level other than 100%.
+    const z = zoom || 1;
+    const dx = (e.clientX - d.startX) / z;
+    const dy = (e.clientY - d.startY) / z;
     if (d.kind === 'move') {
       setDraft({
         x: Math.max(0, d.baseX + dx),
@@ -112,7 +133,7 @@ function DropInFrame({ pageId, dropIn }: FrameProps) {
         height: Math.max(MIN_H, d.baseH + dy),
       });
     }
-  }, []);
+  }, [zoom]);
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     const d = dragRef.current;
